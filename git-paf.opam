@@ -35,3 +35,6 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
+pin-depends: [
+  [ "paf.dev" "git+https://github.com/dinosaure/paf-le-chien.git#53ddbdc374ac0ff50b935a384803539e31f12c48" ]
+]

@@ -14,7 +14,6 @@ module type S = sig
 end
 
 module Make
-    (Time : Mirage_time.S)
     (Pclock : Mirage_clock.PCLOCK)
     (TCP : Tcpip.Tcp.S)
     (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S
