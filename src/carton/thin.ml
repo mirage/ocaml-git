@@ -93,10 +93,9 @@ struct
     let matrix = Array.make max Verify.unresolved_node in
 
     let replace hashtbl k v =
-      try
-        let v' = Hashtbl.find hashtbl k in
-        if v < v' then Hashtbl.replace hashtbl k v'
-      with Not_found -> Hashtbl.add hashtbl k v
+      match Hashtbl.find_opt hashtbl k with
+      | Some v' -> if v' < v then Hashtbl.replace hashtbl k v
+      | None -> Hashtbl.add hashtbl k v
     in
 
     let rec go decoder =
