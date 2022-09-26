@@ -39,10 +39,9 @@ let z = De.bigstring_create De.io_buffer_size
 let allocate bits = De.make_window ~bits
 
 let replace hashtbl k v =
-  try
-    let v' = Hashtbl.find hashtbl k in
-    if v < v' then Hashtbl.replace hashtbl k v'
-  with _ -> Hashtbl.add hashtbl k v
+  match Hashtbl.find_opt hashtbl k with
+  | Some v' -> if v' < v then Hashtbl.replace hashtbl k v
+  | None -> Hashtbl.add hashtbl k v
 
 let never _ = assert false
 
