@@ -16,7 +16,6 @@ let git_mirage_http_headers = Mimic.make ~name:"git-mirage-http-headers"
 let git_mirage_http_tls_config = Mimic.make ~name:"git-mirage-tls-config"
 
 module Make
-    (Time : Mirage_time.S)
     (Pclock : Mirage_clock.PCLOCK)
     (TCP : Tcpip.Tcp.S)
     (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S =
@@ -125,7 +124,7 @@ struct
         ~k:k1 ctx
     in
 
-    Mimic.add Git_paf.git_paf_sleep Time.sleep_ns ctx
+    ctx
 
   module HTTP = struct
     type state =

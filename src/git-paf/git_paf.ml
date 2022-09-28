@@ -7,7 +7,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let git_paf_scheme = Mimic.make ~name:"git-paf-scheme"
 let git_paf_port = Mimic.make ~name:"git-paf-port"
 let git_paf_hostname = Mimic.make ~name:"git-paf-hostname"
-let git_paf_sleep = Mimic.make ~name:"git-paf-sleep"
 
 let with_uri uri ctx =
   let scheme =
@@ -127,11 +126,6 @@ exception Malformed_response of string
 let call ?(ctx = Mimic.empty) ?(headers = Httpaf.Headers.empty) ?body ?chunked
     (meth : [ `GET | `POST ]) uri =
   let ctx = with_uri uri ctx in
-  let sleep =
-    match Mimic.get git_paf_sleep ctx with
-    | Some sleep -> sleep
-    | None -> fun _ -> Lwt.return_unit
-  in
   let headers = with_host headers uri in
   let headers = with_transfer_encoding ~chunked meth body headers in
   let req =
@@ -151,8 +145,7 @@ let call ?(ctx = Mimic.empty) ?(headers = Httpaf.Headers.empty) ?body ?chunked
       let httpaf_body, conn =
         Httpaf.Client_connection.request ~error_handler ~response_handler req
       in
-      Lwt.async (fun () ->
-          Paf.run ~sleep (module Httpaf_Client_connection) conn flow);
+      Lwt.async (fun () -> Paf.run (module Httpaf_Client_connection) conn flow);
       transmit httpaf_body body;
       Lwt.pick
         [
