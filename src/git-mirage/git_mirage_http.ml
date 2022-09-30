@@ -261,34 +261,8 @@ struct
 
   module NSS = Ca_certs_nss.Make (Pclock)
 
-  let of_fp str =
-    let hash, fp =
-      let hash_of_string = function
-        | "md5" -> Some `MD5
-        | "sha" | "sha1" -> Some `SHA1
-        | "sha224" -> Some `SHA224
-        | "sha256" -> Some `SHA256
-        | "sha384" -> Some `SHA384
-        | "sha512" -> Some `SHA512
-        | _ -> None
-      in
-      match String.split_on_char ':' str with
-      | [] -> Fmt.failwith "Invalid fingerprint %S" str
-      | [ fp ] -> `SHA256, fp
-      | hash :: rest -> (
-          match hash_of_string (String.lowercase_ascii hash) with
-          | Some hash -> hash, String.concat "" rest
-          | None -> Fmt.failwith "Invalid hash algorithm: %S" hash)
-    in
-    let fp =
-      try Hex.to_cstruct (`Hex fp)
-      with _ -> Fmt.failwith "Invalid hex fingerprint value: %S" fp
-    in
-    hash, fp
-
   let with_optional_tls_config_and_headers ?headers ?authenticator ctx =
     let time () = Some (Ptime.v (Pclock.now_d_ps ())) in
-    let none ?ip:_ ~host:_ _ = Ok None in
     let authenticator =
       match authenticator with
       | None -> (
@@ -296,30 +270,24 @@ struct
           | Ok authenticator -> authenticator
           | Error (`Msg err) -> failwith err)
       | Some str -> (
-          match String.split_on_char ':' str with
-          | "key" :: tls_key_fingerprint ->
-              let tls_key_fingerprint = String.concat ":" tls_key_fingerprint in
-              let hash, fingerprint = of_fp tls_key_fingerprint in
-              X509.Authenticator.server_key_fingerprint ~time ~hash ~fingerprint
-          | "cert" :: tls_cert_fingerprint ->
-              let tls_cert_fingerprint =
-                String.concat ":" tls_cert_fingerprint
-              in
-              let hash, fingerprint = of_fp tls_cert_fingerprint in
-              X509.Authenticator.server_cert_fingerprint ~time ~hash
-                ~fingerprint
-          | "trust-anchor" :: certs ->
-              let certs = List.map Base64.decode certs in
-              let certs = List.map (Result.map Cstruct.of_string) certs in
-              let certs =
-                List.map
-                  (fun cert -> Result.bind cert X509.Certificate.decode_der)
-                  certs
-              in
-              let certs = List.filter_map Result.to_option certs in
-              X509.Authenticator.chain_of_trust ~time certs
-          | [ "none" ] -> none
-          | _ -> Fmt.failwith "Invalid TLS authenticator: %S" str)
+          match X509.Authenticator.of_string str with
+          | Ok auth -> auth time
+          | Error (`Msg _) ->
+              Fmt.failwith
+                "Invalid TLS authenticator: %S\n\
+                 The format of it is:\n\
+                 - [none]: no authentication\n\
+                 - [key-fp(:<hash>?):<base64-encoded fingerprint>]: to \
+                 authenticate a peer via its key fingerprintf (hash is \
+                 optional and defaults to SHA256)\n\
+                 - [cert-fp(:<hash>?):<base64-encoded fingerprint>]: to \
+                 authenticate a peer via its certificate fingerprint (hash is \
+                 optional and defaults to SHA256)\n\
+                 - [trust-anchor(:<base64-encoded DER certificate>)+] to \
+                 authenticate a peer from a list of certificates (certificate \
+                 must be in PEM format witthout header and footer (----BEGIN \
+                 CERTIFICATE----) and without newlines).\n"
+                str)
     in
     let tls = Tls.Config.client ~authenticator () in
     let ctx = Mimic.add git_mirage_http_tls_config tls ctx in
