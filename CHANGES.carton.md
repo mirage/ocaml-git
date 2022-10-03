@@ -1,3 +1,11 @@
+### 0.5.0 (2022-09-29) Paris - France
+
+- Add missing dependencies on Unix (@dra27, #573)
+- Be able to choose the zlib compression level when we generate a PACK file (@dinosaure, #578)
+- Fix spurious bug when we encode a patch into a PACK file (@dinosaure, #578)
+- Add an accessor to get the hash `ctx` computed by the first-pass of a PACK file (@dinosaure, #584)
+- Fix how we record the _weight_ of Git objects into a PACK file (@dinosaure, #591)
+
 ### 0.4.4 (2022-04-11) Paris - France
 
 - Remove `bigarray-compat` and `mmap` dependencies (@dinosaure, @hannesm, #568)
