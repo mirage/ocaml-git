@@ -27,7 +27,7 @@ depends: [
   "ca-certs-nss"
   "mirage-crypto"
   "ptime"
-  "x509"
+  "x509" {>= "0.16.2"}
   "cstruct"
   "tcpip" {>= "7.0.0"}
   "domain-name" {>= "0.3.0"}
