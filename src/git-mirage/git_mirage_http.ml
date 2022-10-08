@@ -272,22 +272,7 @@ struct
       | Some str -> (
           match X509.Authenticator.of_string str with
           | Ok auth -> auth time
-          | Error (`Msg _) ->
-              Fmt.failwith
-                "Invalid TLS authenticator: %S\n\
-                 The format of it is:\n\
-                 - [none]: no authentication\n\
-                 - [key-fp(:<hash>?):<base64-encoded fingerprint>]: to \
-                 authenticate a peer via its key fingerprintf (hash is \
-                 optional and defaults to SHA256)\n\
-                 - [cert-fp(:<hash>?):<base64-encoded fingerprint>]: to \
-                 authenticate a peer via its certificate fingerprint (hash is \
-                 optional and defaults to SHA256)\n\
-                 - [trust-anchor(:<base64-encoded DER certificate>)+] to \
-                 authenticate a peer from a list of certificates (certificate \
-                 must be in PEM format witthout header and footer (----BEGIN \
-                 CERTIFICATE----) and without newlines).\n"
-                str)
+          | Error (`Msg msg) -> failwith msg)
     in
     let tls = Tls.Config.client ~authenticator () in
     let ctx = Mimic.add git_mirage_http_tls_config tls ctx in
