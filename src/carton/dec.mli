@@ -199,6 +199,9 @@ val len : v -> int
 val depth : v -> int
 (** [depth v] is the depth of the object into the PACK file it came from. *)
 
+val copy : ?flip:bool -> ?weight:weight -> v -> v
+(** [copy v] creates a fresh new object which is equal to the given [v]. *)
+
 val make :
   'fd ->
   ?sector:int64 ->
@@ -363,6 +366,12 @@ val of_offset_with_path :
 (** [of_offset_with_path sched ~map t ~path raw ~cursor] is the object available
     at [cursor] into [t]. This function is {i tail-recursive} and bound to the
     given [path]. *)
+
+val of_offset_with_source :
+  map:'fd W.map -> ('fd, 'uid) t -> v -> cursor:int64 -> v
+(** [of_offset_with_source ~map t ~path source ~cursor] is the object available
+    at [cursor] into [t]. This function is {i tail-recursive} and use the given
+    [source] if the requested object is a patch. *)
 
 (** {3 Uid of object.}
 

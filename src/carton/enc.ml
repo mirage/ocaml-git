@@ -89,6 +89,8 @@ type 'uid q = {
 
 let target_uid { entry; _ } = entry.uid
 let target_length { entry; _ } = entry.length
+let target_patch { patch; _ } = patch
+let source_of_patch { source; _ } = source
 
 let pp_patch target_length pp_uid ppf patch =
   Fmt.pf ppf

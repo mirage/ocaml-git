@@ -622,6 +622,9 @@ module W = struct
     with Found -> !slice
 end
 
+type raw = { raw0 : Bigstringaf.t; raw1 : Bigstringaf.t; flip : bool }
+type v = { kind : kind; raw : raw; len : int; depth : int }
+
 type ('fd, 'uid) t = {
   ws : 'fd W.t;
   fd : 'uid -> int64;
@@ -948,9 +951,6 @@ let length_of_offset : type fd uid. map:fd W.map -> (fd, uid) t -> int64 -> int
       let _, size, _, _ = header_of_entry ~map t cursor slice in
       size
 
-type raw = { raw0 : Bigstringaf.t; raw1 : Bigstringaf.t; flip : bool }
-type v = { kind : kind; raw : raw; len : int; depth : int }
-
 let v ~kind ?(depth = 1) raw =
   let len = Bigstringaf.length raw in
   {
@@ -977,6 +977,29 @@ let flip t = { t with flip = not t.flip }
 let raw { raw; _ } = get_payload raw
 let len { len; _ } = len
 let depth { depth; _ } = depth
+
+let copy ?(flip = false) ?weight v =
+  let weight =
+    match weight with
+    | Some weight -> weight
+    | None -> Bigstringaf.length v.raw.raw0
+  in
+  let raw = Bigstringaf.create (weight * 2) in
+  Bigstringaf.unsafe_blit v.raw.raw0 ~src_off:0 raw ~dst_off:0
+    ~len:(Bigstringaf.length v.raw.raw0);
+  Bigstringaf.unsafe_blit v.raw.raw1 ~src_off:0 raw ~dst_off:weight
+    ~len:(Bigstringaf.length v.raw.raw1);
+  {
+    kind = v.kind;
+    raw =
+      {
+        raw0 = Bigstringaf.sub raw ~off:0 ~len:weight;
+        raw1 = Bigstringaf.sub raw ~off:weight ~len:weight;
+        flip = (if not flip then v.raw.flip else not v.raw.flip);
+      };
+    len = v.len;
+    depth = v.depth;
+  }
 
 let uncompress :
     type fd uid.
@@ -1336,6 +1359,11 @@ let of_offset_with_path :
     if depth == 1 then v else (go [@tailcall]) (pred depth) (flip raw)
   in
   if path.depth > 1 then go (path.depth - 1) (flip raw) else base
+
+let of_offset_with_source :
+    type fd uid. map:fd W.map -> (fd, uid) t -> v -> cursor:int64 -> v =
+ fun ~map t { kind; raw; depth; _ } ~cursor ->
+  of_offset_with_source ~map t kind raw ~depth ~cursor
 
 type 'uid digest = kind:kind -> ?off:int -> ?len:int -> Bigstringaf.t -> 'uid
 
