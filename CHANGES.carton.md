@@ -1,3 +1,8 @@
+### 0.6.0 (2022-10-19) Paris - France
+
+- Add few functions to introspect target when we encode and be able to construct objects with source
+  (@dinosaure, #595)
+
 ### 0.5.0 (2022-09-29) Paris - France
 
 - Add missing dependencies on Unix (@dra27, #573)
