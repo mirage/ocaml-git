@@ -1,3 +1,12 @@
+### 3.10.0 (2022-10-19) Paris - France
+
+- Do not append a leading slash to path (#580, @reynir, @dinosaure)
+- Fix some typos (#585, @hannesm, @dinosaure)
+- Add the `main` reference (#586, @hannesm, @dinosaure)
+- Upgrade `git-paf` with `paf.0.2.0` (#587, @dinosaure)
+- Explain when the user give a bad argument about TLS authenticator (#593, reported by @reynir #582, @dinosaure)
+- Use `x509.0.16.2` which raise an explanation if it's a bad argument (#594, @hannesm, @dinosaure)
+
 ### 3.9.1 (2022-04-11) Paris - France
 
 - Remove `bigarray-compat` package and `mmap` (@dinosaure, @hannesm)
