@@ -59,3 +59,6 @@ build: [
   ["dune" "runtest" "-p" name] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
+pin-depends: [
+  [ "mimic.dev" "git+https://github.com/dinosaure/mimic.git#e679ff43a85d9e51de66a97325f8e3c84e63d292" ]
+]

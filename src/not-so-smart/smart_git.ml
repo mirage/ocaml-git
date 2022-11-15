@@ -383,6 +383,21 @@ struct
         | None -> get_transmission r)
     | [] -> None
 
+  let add_unless lst k v = match List.assoc_opt k lst with
+    | Some _ -> lst
+    | None -> (k, v) :: lst
+
+  let pp_version ppf = function
+    | `V1 -> Fmt.pf ppf "1"
+    | _   -> Fmt.pf ppf "unknown"
+
+  let add_headers_for_fetching ?(version= `V1) ctx =
+    let headers = Option.value ~default:[] (Mimic.get git_http_headers ctx) in
+    let headers = add_unless headers "content-type" "application/x-git-upload-pack-request" in
+    let headers = add_unless headers "accept" "application/x-git-upload-pack-result" in
+    let headers = add_unless headers "git-protocol" (Fmt.str "version=%a" pp_version version) in
+    Mimic.replace git_http_headers headers ctx
+
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx
       (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
@@ -402,6 +417,7 @@ struct
     in
     let stream () = Lwt_stream.get stream in
     let ctx = Mimic.add git_capabilities `Rd (Endpoint.to_ctx edn ctx) in
+    let ctx = add_headers_for_fetching ~version ctx in
     Lwt.catch (fun () ->
         Mimic.unfold ctx >>? fun ress ->
         Mimic.connect ress >>= fun flow ->
@@ -563,6 +579,13 @@ struct
     >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.return_ok ()
 
+  let add_headers_for_pushing ?(version= `V1) ctx =
+    let headers = Option.value ~default:[] (Mimic.get git_http_headers ctx) in
+    let headers = add_unless headers "content-type" "application/x-git-receive-pack-request" in
+    let headers = add_unless headers "accept" "application/x-git-receive-pack-result" in
+    let headers = add_unless headers "git-protocol" (Fmt.str "version=%a" pp_version version) in
+    Mimic.replace git_http_headers headers ctx
+
   let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) cmds =
     let open Rresult in
@@ -570,6 +593,7 @@ struct
     let hostname = edn.Endpoint.hostname in
     let path = edn.Endpoint.path in
     let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
+    let ctx = add_headers_for_pushing ~version ctx in
     Lwt.catch (fun () ->
         Mimic.unfold ctx >>? fun ress ->
         Mimic.connect ress >>= fun res ->
