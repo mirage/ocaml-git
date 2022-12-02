@@ -383,9 +383,9 @@ struct
         | None -> get_transmission r)
     | [] -> None
 
-  let add_unless lst k v = match List.assoc_opt k lst with
+  let add_unless lst k v = match List.assoc_opt (String.lowercase_ascii k) lst with
     | Some _ -> lst
-    | None -> (k, v) :: lst
+    | None -> (String.lowercase_ascii k, v) :: lst
 
   let pp_version ppf = function
     | `V1 -> Fmt.pf ppf "1"
