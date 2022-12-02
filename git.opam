@@ -26,7 +26,7 @@ depends: [
   "decompress" {>= "1.4.0"}
   "logs"
   "lwt"
-  "mimic" {>= "0.0.4"}
+  "mimic" {>= "0.0.6"}
   "cstruct" {>= "6.0.0"}
   "angstrom" {>= "0.14.0"}
   "carton" {>= "0.4.4"}
@@ -59,6 +59,3 @@ build: [
   ["dune" "runtest" "-p" name] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
-pin-depends: [
-  [ "mimic.dev" "git+https://github.com/dinosaure/mimic.git#e679ff43a85d9e51de66a97325f8e3c84e63d292" ]
-]
