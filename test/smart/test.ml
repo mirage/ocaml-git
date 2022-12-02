@@ -1451,7 +1451,6 @@ let test_negotiation_http () =
       Mimic.register ~name:"fake-http" (module HTTP)
     in
     let handshake ~uri0:_ ~uri1:_ flow =
-      Fmt.epr ">>> HANDSHAKE\n%!";
       let module M = (val Mimic.repr fake_http) in
       match flow with
       | M.T flow ->
