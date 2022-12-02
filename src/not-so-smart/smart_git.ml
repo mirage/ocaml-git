@@ -383,19 +383,27 @@ struct
         | None -> get_transmission r)
     | [] -> None
 
-  let add_unless lst k v = match List.assoc_opt (String.lowercase_ascii k) lst with
+  let add_unless lst k v =
+    match List.assoc_opt (String.lowercase_ascii k) lst with
     | Some _ -> lst
     | None -> (String.lowercase_ascii k, v) :: lst
 
   let pp_version ppf = function
     | `V1 -> Fmt.pf ppf "1"
-    | _   -> Fmt.pf ppf "unknown"
+    | _ -> Fmt.pf ppf "unknown"
 
-  let add_headers_for_fetching ?(version= `V1) ctx =
+  let add_headers_for_fetching ?(version = `V1) ctx =
     let headers = Option.value ~default:[] (Mimic.get git_http_headers ctx) in
-    let headers = add_unless headers "content-type" "application/x-git-upload-pack-request" in
-    let headers = add_unless headers "accept" "application/x-git-upload-pack-result" in
-    let headers = add_unless headers "git-protocol" (Fmt.str "version=%a" pp_version version) in
+    let headers =
+      add_unless headers "content-type" "application/x-git-upload-pack-request"
+    in
+    let headers =
+      add_unless headers "accept" "application/x-git-upload-pack-result"
+    in
+    let headers =
+      add_unless headers "git-protocol"
+        (Fmt.str "version=%a" pp_version version)
+    in
     Mimic.replace git_http_headers headers ctx
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx
@@ -579,11 +587,18 @@ struct
     >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.return_ok ()
 
-  let add_headers_for_pushing ?(version= `V1) ctx =
+  let add_headers_for_pushing ?(version = `V1) ctx =
     let headers = Option.value ~default:[] (Mimic.get git_http_headers ctx) in
-    let headers = add_unless headers "content-type" "application/x-git-receive-pack-request" in
-    let headers = add_unless headers "accept" "application/x-git-receive-pack-result" in
-    let headers = add_unless headers "git-protocol" (Fmt.str "version=%a" pp_version version) in
+    let headers =
+      add_unless headers "content-type" "application/x-git-receive-pack-request"
+    in
+    let headers =
+      add_unless headers "accept" "application/x-git-receive-pack-result"
+    in
+    let headers =
+      add_unless headers "git-protocol"
+        (Fmt.str "version=%a" pp_version version)
+    in
     Mimic.replace git_http_headers headers ctx
 
   let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
