@@ -109,7 +109,21 @@ module Endpoint = struct
     match parse_ssh str, parse_uri str with
     | Ok v, _ -> Ok v
     | _, Ok v -> Ok v
-    | Error _, Error _ -> R.error_msgf "Invalid endpoint: %s" str
+    | Error _, Error _ ->
+        R.error_msgf
+          "Invalid endpoint: %s\n\
+           The format of it corresponds to:\n\
+           1) a SSH endpoint like: user@hostname:repository\n\
+           2) a Git endpoint like: git://hostname(:port)?/repository\n\
+           3) a HTTP endpoint like: \
+           http(s)?://(user:password@)?hostname(:port)?/repository\n\
+           4) an URI with a special scheme like: \
+           [scheme]://hostname(:port)?/repository\n\n\
+           It's not possible to specify a port if you use an SSH endpoint and \
+           it's not\n\
+           possible to specify an user and its password if you use a Git or an \
+           URI with\n\
+           a special scheme endpoint." str
 
   let with_headers_if_http headers ({ scheme; _ } as edn) =
     match scheme with
