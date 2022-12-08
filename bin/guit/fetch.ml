@@ -32,10 +32,10 @@ let reporter ppf =
       k ()
     in
     let with_src_and_stamp h _ k fmt =
-      let dt = Mtime.Span.to_us (Mtime_clock.elapsed ()) in
+      let dt_us = 1e-3 *. Int64.to_float (Mtime_clock.elapsed_ns ()) in
       Fmt.kpf k ppf
         ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
-        (pad 10 (Fmt.str "%+04.0fus" dt))
+        (pad 10 (Fmt.str "%+04.0fus" dt_us))
         pp_header (level, h)
         Fmt.(styled `Magenta string)
         (pad 10 @@ Logs.Src.name src)
