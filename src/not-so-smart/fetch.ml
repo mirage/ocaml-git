@@ -113,19 +113,21 @@ struct
     >>= function
     | `Close -> return []
     | `Continue res ->
-        let pack ctx =
+        let recv_pack ctx =
           let open Smart in
           let side_band =
             Smart.Context.is_cap_shared ctx `Side_band
             || Smart.Context.is_cap_shared ctx `Side_band_64k
           in
-          recv ctx (recv_pack ~side_band ~push_stdout ~push_stderr pack)
+          recv ctx (recv_pack ~push_stdout ~push_stderr side_band)
         in
         if res < 0 then Log.warn (fun m -> m "No common commits");
         let rec go () =
-          Log.debug (fun m -> m "Read PACK file.");
-          Smart_flow.run sched fail io flow (pack ctx) |> prj
-          >>= fun continue -> if continue then go () else return ()
+          Smart_flow.run sched fail io flow (recv_pack ctx) |> prj >>= function
+          | `End_of_transmission -> return ()
+          | `Payload (str, off, len) -> pack (str, off, len) >>= go
+          | `Stdout -> go ()
+          | `Stderr -> go ()
         in
         Log.debug (fun m -> m "Start to download PACK file.");
         go () >>= fun () -> return (List.combine refs uids)

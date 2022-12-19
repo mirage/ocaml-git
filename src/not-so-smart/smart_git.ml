@@ -371,10 +371,10 @@ struct
         let v = String.sub payload off len in
         pack (Some (v, 0, len)))
       (fun refs ->
-        pack None;
+        pack None >>= fun () ->
         Mimic.close flow >>= fun () -> Lwt.return_ok refs)
     @@ fun exn ->
-    pack None;
+    pack None >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.fail exn
 
   let default_capabilities =
@@ -428,14 +428,15 @@ struct
     let open Lwt.Infix in
     let hostname = edn.Endpoint.hostname in
     let path = edn.Endpoint.path in
-    let stream, pusher = Lwt_stream.create () in
+    let stream, emitter = Lwt_stream.create_bounded 10 in
     let pusher_with_logging = function
-      | Some (_, _, len) as v ->
+      | Some (str, off, len) ->
           Log.debug (fun m -> m "Download %d byte(s) of the PACK file." len);
-          pusher v
+          emitter#push (str, off, len)
       | None ->
           Log.debug (fun m -> m "End of pack.");
-          pusher None
+          emitter#close;
+          Lwt.return_unit
     in
     let stream () = Lwt_stream.get stream in
     let ctx = Mimic.add git_capabilities `Rd (Endpoint.to_ctx edn ctx) in
