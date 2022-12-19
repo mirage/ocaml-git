@@ -420,15 +420,15 @@ struct
     in
     Mimic.replace git_http_headers headers ctx
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx
-      (access, light_load, heavy_load) store edn ?(version = `V1)
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?(bounds = 10)
+      ?threads ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
       ~idx =
     let open Rresult in
     let open Lwt.Infix in
     let hostname = edn.Endpoint.hostname in
     let path = edn.Endpoint.path in
-    let stream, emitter = Lwt_stream.create_bounded 10 in
+    let stream, emitter = Lwt_stream.create_bounded bounds in
     let pusher_with_logging = function
       | Some (str, off, len) ->
           Log.debug (fun m -> m "Download %d byte(s) of the PACK file." len);
