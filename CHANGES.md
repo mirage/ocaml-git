@@ -1,3 +1,9 @@
+### 3.10.1 (2022-12-07) Paris - France
+
+- Add the NixOS CI to test `ocaml-git` (@Et7f3, #600, #473)
+- Specify few more headers fields when we fetch/push via HTTP (@reynir, @hannesm, @dinosaure, #603, #601)
+- Improve the error message about `Smart_git.Endpoint.of_string` (@reynir, @dinosaure, #605, #604)
+
 ### 3.10.0 (2022-10-19) Paris - France
 
 - Do not append a leading slash to path (#580, @reynir, @dinosaure)
