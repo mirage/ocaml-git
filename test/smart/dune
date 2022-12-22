@@ -49,7 +49,8 @@
   fmt.tty
   logs
   logs.fmt
-  alcotest-lwt))
+  alcotest-lwt
+  unix))
 
 (executable
  (name test_edn)
