@@ -216,11 +216,11 @@ val advertised_refs : (string, string) Advertised_refs.t recv
 val negotiation_result : string Result.t recv
 
 val recv_pack :
-  ?side_band:bool ->
   ?push_stdout:(string -> unit) ->
   ?push_stderr:(string -> unit) ->
-  (string * int * int -> unit) ->
-  bool recv
+  bool ->
+  [ `Payload of string * int * int | `End_of_transmission | `Stdout | `Stderr ]
+  recv
 
 val recv_flush : unit recv
 val recv_commands : (string, string) Commands.t option recv

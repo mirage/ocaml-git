@@ -574,37 +574,32 @@ module Decoder = struct
   let junk_pack_without_sideband (decoder : decoder) =
     decoder.pos <- decoder.max
 
-  let decode_pack ?(side_band = false) ~push_pack ~push_stdout ~push_stderr
-      decoder =
+  let decode_pack ?(side_band = false) ~push_stdout ~push_stderr decoder =
     let with_side_band decoder =
       let v = peek_pkt ~trim:false decoder in
       match String.Sub.head v with
       | Some '\001' ->
-          let off = String.Sub.start_pos v + 1 in
-          let len = String.Sub.stop_pos v - off in
-          let buf = String.Sub.base_string v in
-          push_pack (buf, off, len);
+          let str = String.Sub.to_string (String.Sub.tail v) in
           junk_pkt decoder;
-          return true decoder
+          return (`Payload (str, 0, String.length str)) decoder
       | Some '\002' ->
           let tail = String.Sub.to_string (String.Sub.tail v) (* copy *) in
           push_stdout tail;
           junk_pkt decoder;
-          return true decoder
+          return `Stdout decoder
       | Some '\003' ->
           let tail = String.Sub.to_string (String.Sub.tail v) (* copy *) in
           push_stderr tail;
           junk_pkt decoder;
-          return true decoder
+          return `Stderr decoder
       | Some _ -> fail decoder (`Invalid_side_band (String.Sub.to_string v))
-      | None -> return false decoder
+      | None -> return `End_of_transmission decoder
     in
-    let end_of_pack decoder () = return false decoder in
+    let end_of_pack decoder () = return `End_of_transmission decoder in
     let without_side_band decoder =
       let buf, off, len = peek_pack_without_sideband decoder in
-      push_pack (buf, off, len);
       junk_pack_without_sideband decoder;
-      return true decoder
+      return (`Payload (buf, off, len)) decoder
     in
     if side_band then prompt_pkt ~strict:true with_side_band decoder
     else prompt_pack_without_sideband without_side_band end_of_pack decoder

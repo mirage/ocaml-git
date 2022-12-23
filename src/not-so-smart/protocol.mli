@@ -164,11 +164,15 @@ module Decoder : sig
 
   val decode_pack :
     ?side_band:bool ->
-    push_pack:(string * int * int -> unit) ->
     push_stdout:(string -> unit) ->
     push_stderr:(string -> unit) ->
     decoder ->
-    (bool, [> error ]) state
+    ( [ `Payload of string * int * int
+      | `End_of_transmission
+      | `Stdout
+      | `Stderr ],
+      [> error ] )
+    state
 
   val decode_negotiation : decoder -> (string Negotiation.t, [> error ]) state
   val decode_shallows : decoder -> (string Shallow.t list, [> error ]) state
