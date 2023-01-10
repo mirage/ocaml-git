@@ -1,3 +1,9 @@
+### 3.11.0 (2023-01-10) Paris - France
+
+- Limit the stream between the incoming flow and the PACK analyzer
+  It will bind the analyze with the I/O throughput (@dinosaure, #608)
+- Remove OCaml 5.0.0 warnings (@samoht, #609)
+
 ### 3.10.1 (2022-12-07) Paris - France
 
 - Add the NixOS CI to test `ocaml-git` (@Et7f3, #600, #473)
