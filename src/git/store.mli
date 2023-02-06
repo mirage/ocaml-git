@@ -87,4 +87,11 @@ module Make
     refs:Rs.t ->
     Fpath.t ->
     t Lwt.t
+
+  val close_pack_files : t -> unit Lwt.t
+  (** [close_pack_files t] closes all {!type:Mj.fd}.
+
+      {b NOTE}: Any subsequent use of the [t] has undefined behavior! This
+      function should be registered with [at_exit] to clean pending
+      file-descriptors. *)
 end

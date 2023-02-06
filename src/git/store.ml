@@ -120,6 +120,11 @@ struct
   let root { root; _ } = root
   let dotgit { dotgit; _ } = dotgit
 
+  let close_pack_files { major; packs; _ } =
+    Lwt_list.iter_p
+      (fun (fd, _) -> Mj.close major fd >>= fun _ -> Lwt.return_unit)
+      (Pack.fds packs)
+
   let v ~dotgit ~minor ~major ~major_uid ?(packed = []) ~refs root =
     Pack.make major ~uid_of_major_uid:major_uid.uid_of_major_uid
       ~idx_major_uid_of_uid:major_uid.idx_major_uid_of_uid
