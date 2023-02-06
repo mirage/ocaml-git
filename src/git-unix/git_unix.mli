@@ -31,4 +31,11 @@ module Store : sig
   include Git.S with type hash = Digestif.SHA1.t
 
   val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
+
+  val close_pack_files : t -> unit Lwt.t
+  (** [close_pack_files t] closes all {!type:Mj.fd}.
+
+      {b NOTE}: Any subsequent use of the [t] has undefined behavior! This
+      function should be registered with [at_exit] to clean pending
+      file-descriptors. *)
 end
