@@ -1,3 +1,8 @@
+### 3.12.0 (2023-02-13) Paris - France
+
+- Export a new function to close file-descriptors for PACK file (for git-unix)
+  (@dinosaure, @emillon, @moyodiallo, #590)
+
 ### 3.11.0 (2023-01-10) Paris - France
 
 - Limit the stream between the incoming flow and the PACK analyzer
