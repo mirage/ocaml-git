@@ -23,6 +23,7 @@
   git
   git-unix
   result
+  mirage-crypto-rng
   mirage-crypto-rng.unix
   digestif
   digestif.c
