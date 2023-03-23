@@ -1,7 +1,9 @@
 open Sigs
 
-module Log = (val let src = Logs.Src.create "find-common" in
-                  Logs.src_log src : Logs.LOG)
+module Log =
+  (val let src = Logs.Src.create "find-common" in
+       Logs.src_log src
+      : Logs.LOG)
 
 type configuration = {
   stateless : bool;
@@ -237,18 +239,18 @@ let find_common (type t) scheduler io flow cfg
       Log.debug (fun m ->
           m "Negotiation (got ready: %b, no-done: %b)." !got_ready no_done);
       (if (not !got_ready) || not no_done then
-       Smart_flow.run scheduler raise io flow
-         Smart.(send ctx negotiation_done ())
-      else return ())
+         Smart_flow.run scheduler raise io flow
+           Smart.(send ctx negotiation_done ())
+       else return ())
       >>= fun () ->
       if !retval <> 0 then (
         cfg.multi_ack <- `None;
         incr flushes);
       (if (not !got_ready) || not no_done then (
-       Log.debug (fun m -> m "Negotiation is done!");
-       Smart_flow.run scheduler raise io flow Smart.(recv ctx shallows)
-       >>= fun _shallows -> return ())
-      else return ())
+         Log.debug (fun m -> m "Negotiation is done!");
+         Smart_flow.run scheduler raise io flow Smart.(recv ctx shallows)
+         >>= fun _shallows -> return ())
+       else return ())
       >>= fun () ->
       let rec go () =
         if !flushes > 0 || cfg.multi_ack = `Some || cfg.multi_ack = `Detailed

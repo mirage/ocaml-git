@@ -534,7 +534,7 @@ module Reference_heap = struct
     Bos.OS.Dir.create ~path:true base >>= fun _ ->
     Bos.OS.Dir.exists path >>= fun res ->
     (if res then Bos.OS.Dir.delete ~must_exist:false ~recurse:true path
-    else R.ok ())
+     else R.ok ())
     >>= fun () ->
     Bos.OS.File.tmp "git-reference-%s" >>= fun src ->
     Bos.OS.File.write src str >>= fun () ->

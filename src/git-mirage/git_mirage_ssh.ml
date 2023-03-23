@@ -11,7 +11,6 @@ type endpoint = {
 }
 
 let git_mirage_ssh_password = Mimic.make ~name:"git-mirage-ssh-password"
-
 let git_mirage_ssh_key = Mimic.make ~name:"git-mirage-ssh-key"
 
 let git_mirage_ssh_authenticator =
@@ -21,7 +20,11 @@ module type S = sig
   val connect : Mimic.ctx -> Mimic.ctx Lwt.t
 
   val with_optionnal_key :
-    ?authenticator:string -> key:string option -> password:string option -> Mimic.ctx -> Mimic.ctx Lwt.t
+    ?authenticator:string ->
+    key:string option ->
+    password:string option ->
+    Mimic.ctx ->
+    Mimic.ctx Lwt.t
 
   val ctx : Mimic.ctx
 end
@@ -94,15 +97,15 @@ struct
           Lwt.return
             (Option.map
                (fun credentials ->
-                  {
-                    port = git_port;
-                    hostname = git_hostname;
-                    authenticator = git_mirage_ssh_authenticator;
-                    user = git_ssh_user;
-                    credentials;
-                    path = git_path;
-                    capabilities = git_capabilities;
-                  })
+                 {
+                   port = git_port;
+                   hostname = git_hostname;
+                   authenticator = git_mirage_ssh_authenticator;
+                   user = git_ssh_user;
+                   credentials;
+                   path = git_path;
+                   capabilities = git_capabilities;
+                 })
                credentials)
       | _ -> Lwt.return_none
     in

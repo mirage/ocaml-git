@@ -1,7 +1,9 @@
 open Sigs
 
-module Log = (val let src = Logs.Src.create "smart_flow" in
-                  Logs.src_log src : Logs.LOG)
+module Log =
+  (val let src = Logs.Src.create "smart_flow" in
+       Logs.src_log src
+      : Logs.LOG)
 
 let io_buffer_size = 65536
 

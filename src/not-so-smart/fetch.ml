@@ -29,8 +29,10 @@ module Make
 struct
   open Scheduler
 
-  module Log = (val let src = Logs.Src.create "fetch" in
-                    Logs.src_log src : Logs.LOG)
+  module Log =
+    (val let src = Logs.Src.create "fetch" in
+         Logs.src_log src
+        : Logs.LOG)
 
   let ( >>= ) x f = IO.bind x f
   let return x = IO.return x

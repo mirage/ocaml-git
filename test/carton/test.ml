@@ -1126,7 +1126,7 @@ let () =
           (* XXX(dinosaure): it seems that a bug exists in Git (not ocaml-git)
              on git-index-pack until 1.9.0. *)
           (if Git_version.compare v1_9_0 git_version <= 0 then pack_bomb_pack ()
-          else fake_pack_bomb_pack ());
+           else fake_pack_bomb_pack ());
           cycle ();
         ] );
       "lwt", [ Test_lwt.test_map_yield ];

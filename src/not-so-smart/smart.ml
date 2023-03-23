@@ -92,17 +92,17 @@ module Value = struct
     in
     transl
       (let open Protocol.Decoder in
-      match w with
-      | Advertised_refs -> decode_advertised_refs decoder
-      | Result -> decode_result decoder
-      | Commands -> decode_commands decoder
-      | Recv_pack { side_band; push_stdout; push_stderr } ->
-          decode_pack ~side_band ~push_stdout ~push_stderr decoder
-      | Ack -> decode_negotiation decoder
-      | Status sideband -> decode_status ~sideband decoder
-      | Flush -> decode_flush decoder
-      | Shallows -> decode_shallows decoder
-      | Packet trim -> decode_packet ~trim decoder)
+       match w with
+       | Advertised_refs -> decode_advertised_refs decoder
+       | Result -> decode_result decoder
+       | Commands -> decode_commands decoder
+       | Recv_pack { side_band; push_stdout; push_stderr } ->
+           decode_pack ~side_band ~push_stdout ~push_stderr decoder
+       | Ack -> decode_negotiation decoder
+       | Status sideband -> decode_status ~sideband decoder
+       | Flush -> decode_flush decoder
+       | Shallows -> decode_shallows decoder
+       | Packet trim -> decode_packet ~trim decoder)
 end
 
 type ('a, 'err) t = ('a, 'err) State.t =

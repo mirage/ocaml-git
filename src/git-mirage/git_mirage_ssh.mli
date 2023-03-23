@@ -16,8 +16,11 @@ module type S = sig
   val connect : Mimic.ctx -> Mimic.ctx Lwt.t
 
   val with_optionnal_key :
-    ?authenticator:string -> key:string option -> password:string option ->
-    Mimic.ctx -> Mimic.ctx Lwt.t
+    ?authenticator:string ->
+    key:string option ->
+    password:string option ->
+    Mimic.ctx ->
+    Mimic.ctx Lwt.t
 
   val ctx : Mimic.ctx
 end
