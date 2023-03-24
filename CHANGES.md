@@ -1,3 +1,8 @@
+### 3.13.0 (2023-03-24) Paris - France
+
+- Update tests with `mirage-crypto-rng` (@Zimmi48, #612)
+- Update to `awa.0.2.0` (@hannesm, #613)
+
 ### 3.12.0 (2023-02-13) Paris - France
 
 - Export a new function to close file-descriptors for PACK file (for git-unix)
