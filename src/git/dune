@@ -4,7 +4,6 @@
  (libraries
   angstrom
   astring
-  bigarray-compat
   bigstringaf
   carton
   carton-git
