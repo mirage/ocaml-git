@@ -71,6 +71,12 @@ module Want : sig
     ('uid, 'reference) t
 end
 
+module Have : sig
+  type 'uid t
+
+  val have : 'uid list -> 'uid t
+end
+
 module Result : sig
   type 'uid t = private NAK | ACK of 'uid
 
@@ -176,6 +182,8 @@ type error =
   | `Invalid_result of string
   | `Invalid_command_result of string
   | `Invalid_command of string
+  | `Invalid_want of string
+  | `Invalid_have of string
   | `No_enough_space
   | `Unexpected_pkt_line of string
   | `Unexpected_flush
@@ -229,6 +237,8 @@ val shallows : string Shallow.t list recv
 val status : bool -> string Status.t recv
 val packet : trim:bool -> string recv
 val send_advertised_refs : (string, string) Advertised_refs.t send
+val recv_want : (string, string) Want.t recv
+val recv_have : string Have.t recv
 val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
 val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
 val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t

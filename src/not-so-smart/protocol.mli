@@ -63,6 +63,12 @@ module Want : sig
     ('uid, 'reference) t
 end
 
+module Have : sig
+  type 'uid t
+
+  val have : 'uid list -> 'uid t
+end
+
 module Result : sig
   type 'uid t = private NAK | ACK of 'uid
 
@@ -151,6 +157,8 @@ module Decoder : sig
     | `Invalid_result of string
     | `Invalid_command_result of string
     | `Invalid_command of string
+    | `Invalid_want of string
+    | `Invalid_have of string
     | `Unexpected_pkt_line of string
     | `Unexpected_flush
     | `Invalid_pkt_line of string ]
@@ -182,6 +190,8 @@ module Decoder : sig
     ?sideband:bool -> decoder -> (string Status.t, [> error ]) state
 
   val decode_packet : trim:bool -> decoder -> (string, [> error ]) state
+  val decode_want : decoder -> ((string, string) Want.t, [> error ]) state
+  val decode_have : decoder -> (string Have.t, [> error ]) state
 
   val decode_commands :
     decoder -> ((string, string) Commands.t option, [> error ]) state

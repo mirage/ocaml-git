@@ -141,6 +141,12 @@ module Want = struct
     { wants = hash, others; shallows; deepen; filter; capabilities }
 end
 
+module Have = struct
+  type 'uid t = 'uid list
+
+  let have haves = haves
+end
+
 module Result = struct
   type 'uid t = NAK | ACK of 'uid
 
@@ -290,6 +296,7 @@ end
 module Decoder = struct
   open Astring
   open Pkt_line.Decoder
+  module Sub = String.Sub
 
   type nonrec error =
     [ error
@@ -301,6 +308,8 @@ module Decoder = struct
     | `Invalid_result of string
     | `Invalid_command_result of string
     | `Invalid_command of string
+    | `Invalid_want of string
+    | `Invalid_have of string
     | `Unexpected_flush
     | `Unexpected_pkt_line of string
     | `Invalid_pkt_line of string ]
@@ -317,6 +326,8 @@ module Decoder = struct
     | `Invalid_result raw -> Fmt.pf ppf "Invalid result (%S)" raw
     | `Invalid_command_result raw ->
         Fmt.pf ppf "Invalid result command (%S)" raw
+    | `Invalid_want raw -> Fmt.pf ppf "Invalid want (%S)" raw
+    | `Invalid_have raw -> Fmt.pf ppf "Invalid have (%S)" raw
     | `Unexpected_flush -> Fmt.string ppf "Unexpected flush"
     | `Unexpected_pkt_line raw -> Fmt.pf ppf "Unexpected pkt-line (%S)" raw
     | `Invalid_command cmd -> Fmt.pf ppf "Invalid command (%S)" cmd
@@ -338,6 +349,8 @@ module Decoder = struct
   let v_version = String.Sub.of_string "version"
   let v_nak = String.Sub.of_string "NAK"
   let v_ack = String.Sub.of_string "ACK"
+  let v_have = String.Sub.of_string "have"
+  let v_want = String.Sub.of_string "want "
 
   let decode_advertised_refs decoder =
     let decode_shallows advertised_refs decoder =
@@ -535,6 +548,68 @@ module Decoder = struct
       return r decoder
     in
     prompt_pkt k decoder
+
+  let decode_have decoder =
+    let rec go haves decoder =
+      let v = peek_pkt decoder in
+      if Sub.is_empty v then (
+        junk_pkt decoder;
+        return (Have.have (List.rev haves)) decoder)
+      else
+        match Sub.cut ~sep:v_space v with
+        | Some (have, new_have) ->
+            let haves =
+              if Sub.equal_bytes have v_have then
+                Sub.to_string new_have :: haves
+              else haves
+            in
+            let k decoder = go haves decoder in
+            junk_pkt decoder;
+            prompt_pkt k decoder
+        | _ -> fail decoder (`Invalid_have (Sub.to_string v))
+    in
+    prompt_pkt (go []) decoder
+
+  let decode_want decoder =
+    let decode_all_wants ~first_want ~capabilities decoder =
+      let rec go wants decoder =
+        let v = peek_pkt decoder in
+        if Sub.is_empty v then (
+          junk_pkt decoder;
+          return
+            (Want.want ~capabilities ~others:(List.rev wants) first_want)
+            decoder
+          (* else if start with shallow or depth request or filter request then TODO *))
+        else
+          match Sub.cut ~sep:v_space v with
+          | Some (_, new_want) ->
+              let new_want = Sub.to_string new_want in
+              let k decoder = go (new_want :: wants) decoder in
+              junk_pkt decoder;
+              prompt_pkt k decoder
+          | None -> fail decoder (`Invalid_want (Sub.to_string v))
+      in
+      go [] decoder
+    in
+
+    let decode_first_want decoder =
+      let v = peek_pkt decoder in
+      if Sub.is_prefix v ~affix:v_want then (
+        let v = v |> Sub.with_range ~first:(Sub.length v_want) in
+        match Sub.cut ~sep:v_zero v with
+        | None -> fail decoder (`Invalid_want (Sub.to_string v))
+        | Some (first_want, capabilities) ->
+            let first_want = Sub.to_string first_want in
+            junk_pkt decoder;
+            let capabilities =
+              let capabilities = Sub.fields capabilities in
+              List.map (Capability.of_string <.> Sub.to_string) capabilities
+            in
+            let k = decode_all_wants ~first_want ~capabilities in
+            prompt_pkt k decoder)
+      else fail decoder (`Invalid_want (Sub.to_string v))
+    in
+    prompt_pkt decode_first_want decoder
 
   let prompt_pack_without_sideband kcontinue keof decoder =
     if decoder.pos > 0 then (
