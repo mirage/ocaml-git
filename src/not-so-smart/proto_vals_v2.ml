@@ -27,9 +27,9 @@ module Proto_request = struct
       | host, None -> Fmt.pf ppf "%a" Domain_name.pp host
     in
     Fmt.pf ppf "%a %s %a %a" pp_request_command request_command path
-      Fmt.(prefix (const string " host=") pp_host)
+      Fmt.((const string " host=") ++ pp_host)
       host
-      Fmt.(prefix (const string " version=") int)
+      Fmt.((const string " version=") ++ int)
       version
 end
 
