@@ -145,8 +145,9 @@ let send_pack ?(stateless = false) side_band =
 
 let packet ~trim = Packet trim
 let send_advertised_refs : _ send = Advertised_refs
+let recv_commands : _ recv = Commands
 
-include State.Scheduler (Value)
+include State.Scheduler (Context)(Value)
 
 module Unsafe = struct
   let write context packet =

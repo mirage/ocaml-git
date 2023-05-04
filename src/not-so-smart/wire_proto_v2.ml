@@ -83,4 +83,4 @@ module Value = struct
       | Ls_refs_res -> Proto_vals_v2.Decoder.decode_ls_refs_response decoder)
 end
 
-include State.Scheduler (Value)
+include State.Scheduler (Context)(Value)
