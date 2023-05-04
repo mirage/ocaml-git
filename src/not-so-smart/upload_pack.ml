@@ -48,11 +48,20 @@ struct
     in
     let ctx = Smart.Context.make ~client_caps in
     Smart_flow.run sched fail io flow (fiber ctx) |> prj >>= fun wants ->
-    let rec go =
+    let rec go haves =
       let fiber ctx =
         let open Smart in
-      let* h = recv ctx recv_have in
-      let haves = Smart.a in
+        let* h, cmd = recv ctx recv_have in
+        let haves = h @ haves in
+        match cmd with
+        | `Done ->
+            (* let common_base = compute_common_base store access wants in *)
+            return (new_have @ haves)
+        | `Flush ->
+            let acks = _ store access haves in
+            let* () = send ctx send_ack acks in
+            go haves
+      in
       return (w, h) Smart_flow.run sched fail io flow haves |> prj
       >>= fun haves -> _
     in
