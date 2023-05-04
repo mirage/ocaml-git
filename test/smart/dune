@@ -8,6 +8,7 @@
   lwt_backend
   ref
   store_backend
+  server
   test
   uid
   unix_backend

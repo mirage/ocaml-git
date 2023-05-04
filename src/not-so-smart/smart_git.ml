@@ -357,6 +357,7 @@ struct
   module Flow = Unixiz.Make (Mimic)
   module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
+  module Upload_pack = Nss.Upload_pack.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
   let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
       ~capabilities path flow ?deepen ?want hostname store access fetch_cfg pack
@@ -665,4 +666,22 @@ struct
     @@ function
     | Failure err -> Lwt.return_error (R.msg err)
     | exn -> Lwt.return_error (`Exn exn)
+end
+
+module Make_server
+    (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
+    (Pack : APPEND with type +'a fiber = 'a Lwt.t)
+    (Index : APPEND with type +'a fiber = 'a Lwt.t)
+    (Uid : UID)
+    (Ref : Sigs.REF) =
+struct
+  let upload_pack :
+      (Uid.t, _, _, 'g, Scheduler.t) Sigs.access
+      * Uid.t Carton_lwt.Thin.light_load
+      * Uid.t Carton_lwt.Thin.heavy_load ->
+      (Uid.t, _, 'g) Sigs.store ->
+      flow:Mimic.flow ->
+      (unit, ([> `Exn of exn ] as 'err)) result Lwt.t =
+   fun (access, light_load, heavy_load) store ~flow ->
+    Mimic.close flow >>= fun () -> Lwt.return_ok ()
 end

@@ -119,12 +119,82 @@ module type SMART_GIT = sig
 
   val git_uri : Uri.t Mimic.value
 
-  module Make
+  module Make_client
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
       (Pack : APPEND with type +'a fiber = 'a Lwt.t)
       (Index : APPEND with type +'a fiber = 'a Lwt.t)
       (Uid : UID)
       (Ref : Sigs.REF) : sig
+    val fetch :
+      ?push_stdout:(string -> unit) ->
+      ?push_stderr:(string -> unit) ->
+      ?bounds:int ->
+      ?threads:int ->
+      ctx:Mimic.ctx ->
+      (Uid.t, _, Uid.t * int ref * int64, 'g, Scheduler.t) Sigs.access
+      * Uid.t Carton_lwt.Thin.light_load
+      * Uid.t Carton_lwt.Thin.heavy_load ->
+      (Uid.t, Uid.t * int ref * int64, 'g) Sigs.store ->
+      Endpoint.t ->
+      ?version:[> `V1 ] ->
+      ?capabilities:Smart.Capability.t list ->
+      ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
+      [ `All | `Some of Ref.t list | `None ] ->
+      Pack.t ->
+      Index.t ->
+      src:Pack.uid ->
+      dst:Pack.uid ->
+      idx:Index.uid ->
+      ( [ `Pack of Uid.t * (Ref.t * Uid.t) list | `Empty ],
+        ([> `Exn of exn | Mimic.error ] as 'err) )
+      result
+      Lwt.t
+
+    val push :
+      ctx:Mimic.ctx ->
+      (Uid.t, Ref.t, Uid.t Pck.t, 'g, Scheduler.t) Sigs.access
+      * Uid.t Carton_lwt.Thin.light_load
+      * Uid.t Carton_lwt.Thin.heavy_load ->
+      (Uid.t, Uid.t Pck.t, 'g) Sigs.store ->
+      Endpoint.t ->
+      ?version:[> `V1 ] ->
+      ?capabilities:Smart.Capability.t list ->
+      [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
+      (unit, ([> `Exn of exn | Mimic.error ] as 'err)) result Lwt.t
+  end
+
+  module Make_server
+      (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
+      (Pack : APPEND with type +'a fiber = 'a Lwt.t)
+      (Index : APPEND with type +'a fiber = 'a Lwt.t)
+      (Uid : UID)
+      (Ref : Sigs.REF) : sig
+    val upload_pack :
+      (Uid.t, _, _, 'g, Scheduler.t) Sigs.access
+      * Uid.t Carton_lwt.Thin.light_load
+      * Uid.t Carton_lwt.Thin.heavy_load ->
+      (Uid.t, _, 'g) Sigs.store ->
+      flow:Mimic.flow ->
+      (* -> capabilities:Smart.Capability.t list empty list for now *)
+      (unit, ([> `Exn of exn ] as 'err)) result Lwt.t
+    (** Answers a [git fetch] *)
+
+    val receive_pack :
+      (Uid.t, _, Uid.t, 'g, Scheduler.t) Sigs.access
+      * Uid.t Carton_lwt.Thin.light_load
+      * Uid.t Carton_lwt.Thin.heavy_load ->
+      (Uid.t, _, 'g) Sigs.store ->
+      flow:Mimic.flow ->
+      ?version:[> `V1 ] ->
+      ?capabilities:Smart.Capability.t list ->
+      Pack.t ->
+      Index.t ->
+      src:Pack.uid ->
+      dst:Pack.uid ->
+      idx:Index.uid ->
+      (unit, ([> `Exn of exn ] as 'err)) result Lwt.t
+    (** Answers a [git push]  *)
+
     val fetch :
       ?push_stdout:(string -> unit) ->
       ?push_stderr:(string -> unit) ->
