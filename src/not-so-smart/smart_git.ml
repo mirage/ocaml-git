@@ -194,16 +194,6 @@ struct
   let fs =
     let open Rresult in
     let open Lwt.Infix in
-<<<<<<< HEAD
-    let create t path =
-      Pack.create ~mode:Pack.RdWr t path
-      >|= R.reword_error (R.msgf "%a" Pack.pp_error)
-    in
-    let close t fd =
-      Pack.close t fd >|= R.reword_error (R.msgf "%a" Pack.pp_error)
-    in
-    { Thin.create; append = Pack.append; map = Pack.map; close }
-=======
     Thin.
       {
         create =
@@ -216,7 +206,6 @@ struct
           (fun t fd ->
             Pack.close t fd >|= R.reword_error (R.msgf "%a" Pack.pp_error));
       }
->>>>>>> main
 
   (* XXX(dinosaure): abstract it? *)
   let digest :
@@ -377,32 +366,23 @@ struct
     push_pack (Some (v, 0, len))
 
   let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
-<<<<<<< HEAD
-      ~capabilities path ~ctx ?deepen ?want host store access fetch_cfg
-      push_pack =
+      ~capabilities path flow ?deepen ?want hostname store access fetch_cfg pack
+      =
     let open Lwt.Infix in
-    Mimic.resolve ctx >>= function
-    | Error _ as err ->
-        let pp_host ppf = function
-          | `Domain v -> Domain_name.pp ppf v
-          | `Addr v -> Ipaddr.pp ppf v
-        in
-        Log.err (fun m -> m "%a not found" pp_host host);
-        push_pack None;
-        Lwt.return err
-    | Ok flow ->
-        Lwt.try_bind
-          (fun () ->
-            Fetch_v1.fetch ~uses_git_transport ~push_stdout ~push_stderr
-              ~capabilities ?deepen ?want ~host path (Flow.make flow) store
-              access fetch_cfg
-              (push_pack_new_str push_pack))
-          (fun refs ->
-            push_pack None;
-            Mimic.close flow >>= fun () -> Lwt.return_ok refs)
-          (fun exn ->
-            push_pack None;
-            Mimic.close flow >>= fun () -> Lwt.fail exn)
+    Lwt.try_bind
+      (fun () ->
+        Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
+          ~capabilities ?deepen ?want ~host:hostname path (Flow.make flow) store
+          access fetch_cfg
+        @@ fun (payload, off, len) ->
+        let v = String.sub payload off len in
+        pack (Some (v, 0, len)))
+      (fun refs ->
+        pack None >>= fun () ->
+        Mimic.close flow >>= fun () -> Lwt.return_ok refs)
+    @@ fun exn ->
+    pack None >>= fun () ->
+    Mimic.close flow >>= fun () -> Lwt.fail exn
 
   module Flow_http = struct
     type +'a fiber = 'a Lwt.t
@@ -464,25 +444,6 @@ struct
     >>= fun refs ->
     push_pack None;
     Lwt.return_ok refs
-=======
-      ~capabilities path flow ?deepen ?want hostname store access fetch_cfg pack
-      =
-    let open Lwt.Infix in
-    Lwt.try_bind
-      (fun () ->
-        Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
-          ~capabilities ?deepen ?want ~host:hostname path (Flow.make flow) store
-          access fetch_cfg
-        @@ fun (payload, off, len) ->
-        let v = String.sub payload off len in
-        pack (Some (v, 0, len)))
-      (fun refs ->
-        pack None >>= fun () ->
-        Mimic.close flow >>= fun () -> Lwt.return_ok refs)
-    @@ fun exn ->
-    pack None >>= fun () ->
-    Mimic.close flow >>= fun () -> Lwt.fail exn
->>>>>>> main
 
   let default_capabilities =
     [
@@ -493,12 +454,8 @@ struct
       `Report_status;
     ]
 
-<<<<<<< HEAD
   module V2 = struct end
-
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx
-      (access, light_load, heavy_load) store edn ?(version = `V1)
-=======
+  
   type transmission = [ `Git | `Exec ]
 
   let rec get_transmission :
@@ -535,21 +492,14 @@ struct
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?(bounds = 10)
       ?threads ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
->>>>>>> main
       ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
       ~idx =
     let open Rresult in
     let open Lwt.Infix in
-<<<<<<< HEAD
     let capabilities = Capability.filter_by ~protocol_v:version capabilities in
-    let host = edn.Endpoint.host in
-    let path = edn.path in
-    let stream, pusher = Lwt_stream.create () in
-=======
     let hostname = edn.Endpoint.hostname in
     let path = edn.Endpoint.path in
     let stream, emitter = Lwt_stream.create_bounded bounds in
->>>>>>> main
     let pusher_with_logging = function
       | Some (str, off, len) ->
           Log.debug (fun m -> m "Download %d byte(s) of the PACK file." len);
@@ -561,21 +511,6 @@ struct
     in
     let stream () = Lwt_stream.get stream in
     let ctx = Mimic.add git_capabilities `Rd (Endpoint.to_ctx edn ctx) in
-<<<<<<< HEAD
-    (* XXX(dinosaure): such trick is only about SSH. Indeed, when we use SSH, we
-       should/must? know if we want to fetch or push. If we want to fetch, we
-       will call git-upload-pack. To be able to pass this information to the
-       "connect" function of SSH (whatever the implementation of SSH), we fill
-       the given [ctx] with [`Rd]. *)
-    let run =
-      match version, edn.scheme with
-      | `V1, ((`Git | `SSH _) as scheme) ->
-          let fetch_cfg = Nss.Fetch.V1.configuration capabilities in
-          let uses_git_transport =
-            match scheme with `Git -> true | `SSH _ -> false
-          in
-          let run () =
-=======
     let ctx = add_headers_for_fetching ~version ctx in
     Lwt.catch (fun () ->
         Mimic.unfold ctx >>? fun ress ->
@@ -586,7 +521,6 @@ struct
             let uses_git_transport =
               match transmission with `Git -> true | `Exec -> false
             in
->>>>>>> main
             Lwt.both
               (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
                  ~capabilities path flow ?deepen ~want hostname store access
@@ -598,30 +532,6 @@ struct
             | Ok refs, Ok uid -> Lwt.return_ok (`Pack (uid, refs))
             | (Error _ as err), _ -> Lwt.return err
             | Ok [], _ -> Lwt.return_ok `Empty
-<<<<<<< HEAD
-            | Ok _refs, (Error _ as err) -> Lwt.return err
-          in
-          run
-      | `V1, ((`HTTP _ | `HTTPS _) as scheme) ->
-          Log.debug (fun m -> m "Start an HTTP transmission.");
-          let fetch_cfg =
-            Nss.Fetch.V1.configuration ~stateless:true capabilities
-          in
-          let pp_host ppf = function
-            | `Domain v -> Domain_name.pp ppf v
-            | `Addr v -> Ipaddr.pp ppf v
-          in
-          let uri, headers =
-            match scheme with
-            | `HTTP headers ->
-                ( Uri.of_string (Fmt.str "http://%a%s.git" pp_host host path),
-                  headers )
-            | `HTTPS headers ->
-                ( Uri.of_string (Fmt.str "https://%a%s.git" pp_host host path),
-                  headers )
-          in
-          let run () =
-=======
             | Ok _refs, (Error _ as err) -> Lwt.return err)
         | Ok flow, Some (`HTTP (uri, handshake)), `V1 -> (
             let fetch_cfg =
@@ -634,7 +544,6 @@ struct
             let uri1 =
               Fmt.str "%a/git-upload-pack" Uri.pp uri |> Uri.of_string
             in
->>>>>>> main
             Lwt.both
               ( handshake ~uri0 ~uri1 flow >>= fun () ->
                 fetch_v1 ~push_stdout ~push_stderr ~capabilities path flow
@@ -780,11 +689,8 @@ struct
 
   let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) cmds =
-<<<<<<< HEAD
     let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
     let capabilities = Capability.filter_by ~protocol_v:version capabilities in
-=======
->>>>>>> main
     let open Rresult in
     let open Lwt.Infix in
     let hostname = edn.Endpoint.hostname in
