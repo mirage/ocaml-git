@@ -90,7 +90,7 @@ struct
           Smart.Context.is_cap_shared ctx `Side_band
           || Smart.Context.is_cap_shared ctx `Side_band_64k
         in
-        let pack = Smart.send_pack ~stateless side_band in
+        let pack = Smart.send_pack ~stateless:push_cfg.stateless side_band in
         let rec go () =
           stream () >>= function
           | None ->
@@ -101,11 +101,12 @@ struct
                   m "report-status capability: %b." report_status);
               if report_status then
                 State_flow.run sched fail Smart.pp_error io flow
-                  Smart.(recv ctx status)
+                  Smart.(recv ctx (status side_band))
                 |> prj
                 >>| Smart.Status.map ~f:Ref.v
               else if uses_git_transport then
-                Smart_flow.run sched fail io flow Smart.(recv ctx recv_flush)
+                State_flow.run sched fail Smart.pp_error io flow
+                  Smart.(recv ctx recv_flush)
                 |> prj
                 >>= fun () ->
                 let cmds = List.map R.ok (Smart.Commands.commands cmds) in
