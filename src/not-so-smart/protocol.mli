@@ -51,7 +51,14 @@ module Proto_request : sig
 end
 
 module Want : sig
-  type ('uid, 'reference) t
+  type ('uid, 'reference) t = private {
+    wants : 'uid * 'uid list;
+    shallows : 'uid list;
+    deepen :
+      [ `Depth of int | `Timestamp of int64 | `Not of 'reference ] option;
+    filter : Filter.t option;
+    capabilities : Capability.t list;
+  }
 
   val v :
     capabilities:Capability.t list ->
@@ -72,9 +79,9 @@ module Want : sig
 end
 
 module Have : sig
-  type 'uid t
+  type 'uid t = private 'uid list * [ `Done | `Flush ]
 
-  val have : 'uid list -> 'uid t
+  val have : cmd:[ `Done | `Flush ] -> 'uid list -> 'uid t
 end
 
 module Result : sig
