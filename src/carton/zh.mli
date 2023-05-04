@@ -8,9 +8,10 @@ module N : sig
   val encode : encoder -> ret
 
   val encoder :
+    ?level:int ->
     i:Zl.bigstring ->
     q:De.Queue.t ->
-    w:Zl.window ->
+    w:De.Lz77.window ->
     source:int ->
     H.bigstring ->
     dst ->

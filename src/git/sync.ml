@@ -30,6 +30,7 @@ module type S = sig
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
+    ?threads:int ->
     ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
@@ -56,8 +57,7 @@ module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
     (Index : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
-    (Store : Minimal.S with type hash = Digestif.t)
-    (HTTP : Smart_git.HTTP) =
+    (Store : Minimal.S with type hash = Digestif.t) =
 struct
   type hash = Digestif.t
   type store = Store.t
@@ -177,18 +177,18 @@ struct
           | `Blob -> `C
           | `Tag -> `D
         in
-        let raw = Bigstringaf.sub buffer ~off ~len in
+        let raw = Bigstringaf.copy buffer ~off ~len in
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
-  include Smart_git.Make (Scheduler) (Pack) (Index) (HTTP) (Hash) (Reference)
+  include Smart_git.Make (Scheduler) (Pack) (Index) (Hash) (Reference)
 
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx endpoint t
-      ?version ?capabilities ?deepen want ~src ~dst ~idx ~create_idx_stream
-      ~create_pack_stream t_pck t_idx =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx
+      endpoint t ?version ?capabilities ?deepen want ~src ~dst ~idx
+      ~create_idx_stream ~create_pack_stream t_pck t_idx =
     let want, src_dst_mapping =
       match want with
       | (`All | `None) as x -> x, fun src -> [ src ]
@@ -214,13 +214,14 @@ struct
           `Some src_refs, src_dst_mapping
     in
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    fetch ~push_stdout ~push_stderr ~ctx
+    fetch ~push_stdout ~push_stderr ?threads ~ctx
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities ?deepen want t_pck t_idx ~src
       ~dst ~idx
     >>? function
     | `Empty -> Lwt.return_ok None
     | `Pack (uid, refs) ->
+        Log.debug (fun m -> m "Start to write many objects.");
         Store.batch_write t uid ~pck:(create_pack_stream ())
           ~idx:(create_idx_stream ())
         >|= Rresult.R.reword_error (fun err -> `Store err)

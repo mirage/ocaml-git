@@ -1,0 +1,5 @@
+(cram
+ (package git-unix)
+ (enabled_if
+  (= %{os_type} "Unix"))
+ (deps %{bin:guit.fetch} %{bin:guit.v}))

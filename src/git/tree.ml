@@ -125,9 +125,9 @@ let value_of_entry = function
   | { name; _ } -> Contents name
 
 let v entries =
-  List.map (fun entry -> value_of_entry entry, entry) entries
-  |> List.sort (fun (a, _) (b, _) -> compare a b)
-  |> List.map snd
+  List.rev_map (fun entry -> value_of_entry entry, entry) entries
+  |> List.sort (fun (a, _) (b, _) -> compare b a)
+  |> List.rev_map snd
 
 let remove ~name t =
   let c = Contents name and n = Node name in
@@ -183,7 +183,6 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
   type hash = Hash.t
 
   type nonrec entry = hash entry
-
   and t = hash t
 
   let pp ppf t = pp ~pp:Hash.pp ppf t

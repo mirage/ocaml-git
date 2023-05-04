@@ -1,4 +1,6 @@
-module Scheduler = Hkt.Make_sched (struct type +'a t = 'a Lwt.t end)
+module Scheduler = Hkt.Make_sched (struct
+  type +'a t = 'a Lwt.t
+end)
 
 let lwt =
   let open Scheduler in

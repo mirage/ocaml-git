@@ -76,7 +76,10 @@ module Make
 struct
   module Hash = Hash.Make (Digestif)
   module Value = Value.Make (Hash)
-  module Caml_scheduler = Carton.Make (struct type 'a t = 'a end)
+
+  module Caml_scheduler = Carton.Make (struct
+    type 'a t = 'a
+  end)
 
   module Reference = struct
     type hash = Hash.t
@@ -102,7 +105,7 @@ struct
     major : Mj.t;
     major_uid : (hash, Mj.uid, Mj.t) major;
     packs : (Mj.uid, < rd : unit > Mj.fd, Hash.t) Carton_git.t;
-    pools :
+    mutable pools :
       ((< rd : unit > Mj.fd * int64)
       * (< rd : unit > Mj.fd * int64) Carton_git.buffers Lwt_pool.t)
       list;
@@ -116,6 +119,11 @@ struct
 
   let root { root; _ } = root
   let dotgit { dotgit; _ } = dotgit
+
+  let close_pack_files { major; packs; _ } =
+    Lwt_list.iter_p
+      (fun (fd, _) -> Mj.close major fd >>= fun _ -> Lwt.return_unit)
+      (Pack.fds packs)
 
   let v ~dotgit ~minor ~major ~major_uid ?(packed = []) ~refs root =
     Pack.make major ~uid_of_major_uid:major_uid.uid_of_major_uid
@@ -139,6 +147,7 @@ struct
       let buffers =
         {
           window = De.make_window ~bits:15;
+          lz = De.Lz77.make_window ~bits:15;
           queue = De.Queue.create 0x1000;
           i = Bigstringaf.create De.io_buffer_size;
           o = Bigstringaf.create De.io_buffer_size;
@@ -148,7 +157,7 @@ struct
       Lwt.return buffers
     in
     let rs = refs in
-    Log.debug (fun m -> m "%d packed-refs added.\n%!" (List.length packed));
+    Log.debug (fun m -> m "%d packed-refs added." (List.length packed));
     let refs =
       {
         atomic_wr =
@@ -204,7 +213,9 @@ struct
   let read_inflated t hash =
     Log.debug (fun l -> l "Git.read %a" Hash.pp hash);
     Pack.get t.major ~resources:(resources t) t.packs hash >>= function
-    | Ok v -> Lwt.return_some v
+    | Ok v ->
+        Log.debug (fun l -> l "%a found." Hash.pp hash);
+        Lwt.return_some v
     | Error (`Msg _) -> Lwt.return_none
     | Error (`Not_found _) -> (
         Lwt_pool.use t.buffs @@ fun buffers ->
@@ -215,23 +226,31 @@ struct
             | Ok v -> Lwt.return_some v
             | Error _ -> Lwt.return_none))
 
+  let decode_value (v : Carton.Dec.v) : (Value.t, [> `Msg of string ]) result =
+    let kind =
+      match Carton.Dec.kind v with
+      | `A -> `Commit
+      | `B -> `Tree
+      | `C -> `Blob
+      | `D -> `Tag
+    in
+    let raw =
+      Cstruct.of_bigarray (Carton.Dec.raw v) ~off:0 ~len:(Carton.Dec.len v)
+    in
+    Value.of_raw ~kind raw
+
+  let read_opt t hash =
+    read_inflated t hash >|= function
+    | None -> Ok None
+    | Some v -> decode_value v |> Result.map Option.some
+
   let read t hash =
-    read_inflated t hash >>= function
-    | None ->
+    read_opt t hash >|= function
+    | Ok (Some v) -> Ok v
+    | Ok None ->
         Log.err (fun m -> m "Object %a not found." Hash.pp hash);
-        Lwt.return_error (`Not_found hash)
-    | Some v ->
-        let kind =
-          match Carton.Dec.kind v with
-          | `A -> `Commit
-          | `B -> `Tree
-          | `C -> `Blob
-          | `D -> `Tag
-        in
-        let raw =
-          Cstruct.of_bigarray (Carton.Dec.raw v) ~off:0 ~len:(Carton.Dec.len v)
-        in
-        Lwt.return (Value.of_raw ~kind raw)
+        Error (`Not_found hash)
+    | Error _ as e -> e
 
   let read_exn t hash =
     read t hash >>= function
@@ -376,11 +395,25 @@ struct
       | Some str -> Mj.append t.major fd str >>= fun () -> save stream fd
       | None -> Mj.close t.major fd
     in
-    Mj.create ~mode:Mj.Wr t.major mj_pck_uid
+    Log.debug (fun m -> m "Create a new pack file.");
+    Mj.create ~trunc:true ~mode:Mj.Wr t.major mj_pck_uid
     >>? save pck
     >>? (fun () ->
-          Mj.create ~mode:Mj.Wr t.major mj_idx_uid >>? save idx >>? fun () ->
-          Pack.add t.major t.packs ~idx:mj_idx_uid mj_pck_uid)
+          Mj.create ~trunc:true ~mode:Mj.Wr t.major mj_idx_uid >>? save idx
+          >>? fun () ->
+          Log.debug (fun m -> m "Add a new PACK file.");
+          Pack.add t.major t.packs ~idx:mj_idx_uid mj_pck_uid >>? fun fd ->
+          let resource =
+            ( fd,
+              Lwt_pool.create 4 @@ fun () ->
+              let z = Bigstringaf.create De.io_buffer_size in
+              let w = De.make_window ~bits:15 in
+              let allocate _ = w in
+              let w = Carton.Dec.W.make fd in
+              Lwt.return { Carton_git.z; allocate; w } )
+          in
+          t.pools <- resource :: t.pools;
+          Lwt.return_ok ())
     >|= Rresult.R.reword_error (fun err -> `Major err)
 
   module Ref = struct
@@ -428,7 +461,7 @@ struct
       match res with
       | Ok _ as v -> Lwt.return v
       | Error (`Not_found refname) ->
-          Log.err (fun m -> m "Reference %a not found." Reference.pp refname);
+          Log.warn (fun m -> m "Reference %a not found." Reference.pp refname);
           Lwt.return_error (`Reference_not_found refname)
 
     let resolve t refname =

@@ -13,26 +13,24 @@ doc: "https://mirage.github.io/ocaml-git/"
 bug-reports: "https://github.com/mirage/ocaml-git/issues"
 depends: [
   "ocaml" {>= "4.08.0"}
-  "dune" {>= "2.6.0"}
+  "dune" {>= "2.8.0"}
   "carton" {= version}
   "carton-lwt" {= version}
-  "bigstringaf"
-  "bigarray-compat"
+  "bigstringaf" {>= "0.9.0"}
   "lwt"
   "fpath"
   "result"
-  "mmap"
-  "fmt" {>= "0.8.7"}
+  "fmt" {>= "0.8.9"}
   "base-unix"
-  "decompress" {>= "1.2.0"}
+  "decompress" {>= "1.4.3"}
   "astring" {>= "0.8.5"}
   "alcotest" {>= "1.2.3" & with-test}
   "alcotest-lwt" {>= "1.2.3" & with-test}
-  "cstruct" {>= "6.0.0" & with-test}
-  "logs" {>= "0.7.0" & with-test}
+  "cstruct" {>= "6.1.0" & with-test}
+  "logs" {>= "0.7.0"}
   "mirage-flow" {>= "2.0.1" & with-test}
   "rresult" {>= "0.6.0" & with-test}
-  "ke" {>= "0.4" & with-test}
+  "ke" {>= "0.6" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]

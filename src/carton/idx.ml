@@ -49,7 +49,6 @@ type 'uid idx = {
 }
 
 and sub = { off : int; len : int }
-
 and optint = Optint.t
 
 let make :
@@ -171,7 +170,13 @@ let find idx hash =
       let crc = get_int32_be idx.mp (crcs_offset + (n * 4)) in
       let off = get_int32_be idx.mp (values_offset + (n * 4)) in
 
-      Some (Optint.of_int32 crc, Int64.of_int32 off)
+      if Int32.logand off 0x80000000l <> 0l then
+        let off = Int32.to_int off land 0x7fffffff in
+        let off =
+          get_int64_be idx.mp (values_offset + (idx.n * 4) + (off * 8))
+        in
+        Some (Optint.of_int32 crc, off)
+      else Some (Optint.of_int32 crc, Int64.of_int32 off)
   | exception Not_found -> None
 
 let exists idx uid =
@@ -240,6 +245,7 @@ end = struct
     mutable o_pos : int;
     mutable o_max : int;
     t : bigstring;
+    q : int64 Queue.t;
     mutable t_pos : int;
     mutable t_max : int;
     mutable n : int;
@@ -357,11 +363,35 @@ end = struct
     Bigstringaf.blit_from_string uid ~src_off:0 s ~dst_off:j ~len:Uid.length;
     k e
 
+  let rec encode_big_offset e `Await =
+    let offset = Queue.pop e.q in
+    Fmt.epr ">>> ENCODE BIG OFFSET: %Lx\n%!" offset;
+    let k e =
+      if Queue.is_empty e.q then encode_trail e `Await
+      else encode_big_offset e `Await
+    in
+
+    let rem = o_rem e in
+
+    let s, j, k =
+      if rem < 8 then (
+        t_range e 7;
+        e.t, 0, t_flush k)
+      else
+        let j = e.o_pos in
+        e.o_pos <- e.o_pos + 8;
+        e.o, j, k
+    in
+
+    Bigstringaf.set_int64_be s j offset;
+    k e
+
   let rec encode_offset e `Await =
     let k e =
       if e.n + 1 == Array.length e.index then (
         e.n <- 0;
-        encode_trail e `Await)
+        if Queue.is_empty e.q then encode_trail e `Await
+        else encode_big_offset e `Await)
       else (
         e.n <- succ e.n;
         encode_offset e `Await)
@@ -378,8 +408,14 @@ end = struct
         e.o, j, k
     in
     let { offset; _ } = e.index.(e.n) in
-    Bigstringaf.set_int32_be s j (Int64.to_int32 offset);
-    k e
+    if Int64.shift_right_logical offset 31 <> 0L then (
+      let n = Queue.length e.q in
+      Queue.push offset e.q;
+      Bigstringaf.set_int32_be s j Int32.(logor 0x80000000l (of_int n));
+      k e)
+    else (
+      Bigstringaf.set_int32_be s j (Int64.to_int32 offset);
+      k e)
 
   let rec encode_crc e `Await =
     let k e =
@@ -504,6 +540,7 @@ end = struct
       o_pos;
       o_max;
       t = Bigstringaf.create Uid.length;
+      q = Queue.create ();
       t_pos = 1;
       t_max = 0;
       n = 0;
@@ -518,24 +555,28 @@ end = struct
   let encode e = e.k e
 end
 
+type file = File
+
+module Ephemeron = Ephemeron.K1.Make (struct
+  type t = file
+
+  let equal = ( = )
+  let hash = Hashtbl.hash
+end)
+
 module Device = struct
-  type 'uid value = Bigstringaf.t
-  type key = Key
-  type uid = key ref
-  type 'uid t = (key ref, 'uid value ref) Ephemeron.K1.t
+  type t = Bigstringaf.t ref Ephemeron.t
+  type uid = file
 
-  let device () = Ephemeron.K1.create ()
+  let device () = Ephemeron.create 1
 
-  let create tbl =
-    let key = ref Key in
-    Ephemeron.K1.set_key tbl key;
-    Ephemeron.K1.set_data tbl (ref Bigstringaf.empty);
-    key
+  let create device =
+    let file = File in
+    Ephemeron.add device file (ref Bigstringaf.empty);
+    file
+    [@@inline never]
 
-  let project tbl uid =
-    assert (Ephemeron.K1.get_key tbl = Some uid);
-    match Stdlib.Option.get (Ephemeron.K1.get_data tbl) with
-    | { contents = v } -> v
+  let project device file = !(Ephemeron.find device file)
 end
 
 module M (IO : sig
@@ -558,6 +599,7 @@ struct
     mutable buffer : Bigstringaf.t;
     mutable capacity : int;
     mutable length : int;
+    uid : Device.uid;
   }
 
   let enlarge fd more =
@@ -583,18 +625,22 @@ struct
     (* assert (old_length + more <= fd.capacity) ; *)
     ()
 
-  type t = Uid.t Device.t
+  type t = Device.t
   type uid = Device.uid
-  type error = [ `Already_computed ]
+  type error = |
 
-  let pp_error ppf = function
-    | `Already_computed -> Fmt.string ppf "IDX already computed"
+  let pp_error : error Fmt.t = fun _ppf -> function _ -> .
 
-  let create tbl uid =
-    assert (Ephemeron.K1.get_key tbl = Some uid);
-    (* Ephemeron.K1.set_data tbl (ref Bigstringaf.empty); *)
-    return
-      (Ok { buffer = Bigstringaf.create 0x1000; capacity = 0x1000; length = 0 })
+  let create device uid =
+    assert (Ephemeron.mem device uid);
+    IO.return
+      (Ok
+         {
+           uid;
+           buffer = Bigstringaf.create 0x1000;
+           capacity = 0x1000;
+           length = 0;
+         })
 
   let append _ fd str =
     let len = String.length str in
@@ -605,10 +651,9 @@ struct
     fd.length <- new_length;
     IO.return ()
 
-  let close tbl fd =
+  let close device fd =
     let result = Bigstringaf.sub fd.buffer ~off:0 ~len:fd.length in
-    (match Ephemeron.K1.get_data tbl with
-    | Some value -> value := result
-    | None -> assert false);
+    let v = Ephemeron.find device fd.uid in
+    v := result;
     IO.return (Ok ())
 end

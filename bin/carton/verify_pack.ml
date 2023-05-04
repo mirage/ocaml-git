@@ -28,10 +28,9 @@ let z = De.bigstring_create De.io_buffer_size
 let allocate bits = De.make_window ~bits
 
 let replace hashtbl k v =
-  try
-    let v' = Hashtbl.find hashtbl k in
-    if v < v' then Hashtbl.replace hashtbl k v'
-  with _ -> Hashtbl.add hashtbl k v
+  match Hashtbl.find_opt hashtbl k with
+  | Some v' -> if v' < v then Hashtbl.replace hashtbl k v
+  | None -> Hashtbl.add hashtbl k v
 
 let never _ = assert false
 
@@ -152,9 +151,9 @@ let first_pass fpath =
       return (Ok (hash, oracle, matrix, length, carbon))
 
 let map ~max fd ~pos len =
-  let len = Stdlib.min len Int64.(to_int (sub max pos)) in
+  let len = Stdlib.min len (Int64.to_int (Int64.sub max pos)) in
   let res =
-    Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+    Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
   Bigarray.array1_of_genarray res
 
@@ -167,7 +166,8 @@ let second_pass fpath (hash, oracle, matrix) =
     Carton.Dec.make fd ~allocate ~z ~uid_ln:SHA1.length
       ~uid_rw:SHA1.of_raw_string never
   in
-  Verify.verify ~threads:(Fiber.get_concurrency ()) pack ~map ~oracle ~matrix
+  Verify.verify ~threads:(Fiber.get_concurrency ()) pack ~map ~oracle
+    ~verbose:ignore ~matrix
   >>= fun () ->
   match Array.for_all Verify.is_resolved matrix with
   | false -> return (R.error_msgf "Thin PACK file")
@@ -181,7 +181,7 @@ let pp_kind ppf = function
 
 let pp_delta ppf status =
   match Verify.source_of_status status with
-  | Some uid -> Fmt.pf ppf "%d %a" (Verify.depth_of_status status) SHA1.pp uid
+  | Some uid -> Fmt.pf ppf " %d %a" (Verify.depth_of_status status) SHA1.pp uid
   | None -> ()
 
 let verify_hash ~memory hash =
@@ -198,7 +198,7 @@ let verify ~verbose fpath hash length carbon matrix =
   let fd = Unix.openfile (Fpath.to_string fpath) Unix.[ O_RDONLY ] 0o644 in
   let len = (Unix.fstat fd).Unix.st_size in
   let memory =
-    Mmap.V1.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false [| len |]
+    Unix.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false [| len |]
   in
   let memory = Bigarray.array1_of_genarray memory in
   Unix.close fd;
@@ -232,7 +232,7 @@ let verify ~verbose fpath hash length carbon matrix =
           | exception _ -> Hashtbl.replace chains depth 1);
           match Carton.Dec.Idx.find idx uid with
           | Some (_crc, offset') when offset = offset' ->
-              Fmt.pr "%a %a %d %d %Ld %a\n%!" SHA1.pp uid pp_kind kind
+              Fmt.pr "%a %a %d %d %Ld%a\n%!" SHA1.pp uid pp_kind kind
                 (size :> int)
                 size_in_pack offset pp_delta status
           | _ -> Fmt.failwith "Invalid PACK file"
@@ -268,7 +268,10 @@ let run ~verbose fpath =
   second_pass pack (hash, oracle, matrix) >>? fun (hash, matrix) ->
   verify ~verbose fpath hash length carbon matrix |> Scheduler.prj
 
-let run verbose fpath = Fiber.run (run ~verbose fpath)
+let run verbose fpath =
+  match Fiber.run (run ~verbose fpath) with
+  | Ok () -> Ok ()
+  | Error (`Msg err) -> Error (Fmt.str "%s." err)
 
 open Cmdliner
 
@@ -294,7 +297,6 @@ let fpath =
 
 let cmd =
   let doc = "Validate packed Git archive files" in
-  let exits = Term.default_exits in
   let man =
     [
       `S Manpage.s_description;
@@ -304,6 +306,7 @@ let cmd =
          pack file.";
     ]
   in
-  Term.(const run $ verbose $ fpath), Term.info "verify-pack" ~doc ~exits ~man
+  let info = Cmd.info "verify-pack" ~doc ~man in
+  Cmd.v info Term.(const run $ verbose $ fpath)
 
-let () = Term.(exit @@ eval cmd)
+let () = exit @@ Cmd.eval_result cmd

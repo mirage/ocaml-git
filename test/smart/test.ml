@@ -7,6 +7,34 @@ open Store_backend
 (** logging: *)
 let () = Printexc.record_backtrace true
 
+let v2_28_0 =
+  {
+    Git_version.major = 2;
+    minor = 28;
+    patch = Some "0";
+    revision = None;
+    release_candidate = None;
+  }
+
+let git_version =
+  match
+    Bos.(
+      OS.Cmd.run_out Cmd.(v "git" % "--version") |> OS.Cmd.out_string ~trim:true)
+  with
+  | Error (`Msg err) -> failwith err
+  | Ok (str, _) -> (
+      match Git_version.parse str with
+      | Some version -> version
+      | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
+
+let git_init_with_branch branch =
+  let open Bos in
+  let open Rresult in
+  if Git_version.compare git_version v2_28_0 < 0 then
+    OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+    OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % branch)
+  else OS.Cmd.run Cmd.(v "git" % "init" % "-b" % branch)
+
 let reporter ppf =
   let report src level ~over k msgf =
     let k _ =
@@ -14,9 +42,12 @@ let reporter ppf =
       k ()
     in
     let with_metadata header _tags k ppf fmt =
+      let path = Fpath.v (Unix.getcwd ()) in
       Format.kfprintf k ppf
-        ("%a[%a]: " ^^ fmt ^^ "\n%!")
+        ("%a[%a][%a]: " ^^ fmt ^^ "\n%!")
         Logs_fmt.pp_header (level, header)
+        Fmt.(styled `Blue string)
+        (Fpath.basename path)
         Fmt.(styled `Magenta string)
         (Logs.Src.name src)
     in
@@ -24,7 +55,7 @@ let reporter ppf =
   in
   { Logs.report }
 
-let () = Mirage_crypto_rng_unix.initialize ()
+let () = Mirage_crypto_rng_unix.initialize (module Mirage_crypto_rng.Fortuna)
 let () = Fmt_tty.setup_std_outputs ~style_renderer:`Ansi_tty ~utf_8:true ()
 let () = Logs.set_reporter (reporter Fmt.stderr)
 let () = Logs.set_level ~all:true (Some Logs.Debug)
@@ -48,9 +79,19 @@ let ctx_with_pipe ?cwd ?(env = [||]) ?(args = [||]) cmd =
   Mimic.add pipe_value { cmd; args; env; cwd } Mimic.empty
 
 let fifo_value, fifo = Mimic.register ~name:"fifo" (module Fifo)
-let ctx_with_fifo ic oc = Mimic.add fifo_value (ic, oc) Mimic.empty
-let loopback_value, loopback = Mimic.register ~name:"loopback" (module Loopback)
-let ctx_with_payloads payloads = Mimic.add loopback_value payloads Mimic.empty
+
+let ctx_with_fifo ic oc =
+  Mimic.empty
+  |> Mimic.add fifo_value (ic, oc)
+  |> Mimic.add Smart_git.git_transmission `Exec
+
+let loopback_endpoint, loopback =
+  Mimic.register ~name:"loopback" (module Loopback)
+
+let ctx_with_payloads ?(transmission = `Git) payloads =
+  Mimic.empty
+  |> Mimic.add loopback_endpoint payloads
+  |> Mimic.add Smart_git.git_transmission transmission
 
 (** Alcotest setup for testing: *)
 let uid = Alcotest.testable Uid.pp Uid.equal
@@ -77,7 +118,7 @@ module Tmp_dirs = struct
   let are_valid = ref true
 end
 
-let () = at_exit (fun () -> if !Tmp_dirs.are_valid then Tmp_dirs.remove_all ())
+(* let () = at_exit (fun () -> if !Tmp_dirs.are_valid then Tmp_dirs.remove_all ()) *)
 
 let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
   let dir = Option.value_else prefix_path ~else_:OS.Dir.default_tmp in
@@ -110,7 +151,7 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
       r
   | Error _ as e -> e
 
-(* XXX(dinosaure): FIFO "à la BOS".*)
+(* XXX(dinosaure): FIFO "à la BOS". *)
 
 (** to keep track of named pipes (aka FIFOs) created by unit tests
     and clean them up afterwards *)
@@ -163,8 +204,7 @@ let create_new_git_store _sw =
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
-    OS.Dir.with_current root (fun () -> OS.Cmd.run Cmd.(v "git" % "init")) ()
-    |> R.join
+    OS.Dir.with_current root git_init_with_branch "master" |> R.join
     >>= fun () ->
     let access = access lwt in
     let light_load uid = lightly_load lwt root uid |> Scheduler.prj in
@@ -284,19 +324,15 @@ let sync_err r = R.reword_error (fun e -> `Sync e) r
 let bad_input_err r = R.reword_error (fun e -> `Bad_input e) r
 
 let test_sync_fetch () =
-  Alcotest_lwt.test_case
-    "Sync.fetch fetches given remote ref and overwrites existing and \
-     non-existing local ref"
-    `Quick
-  @@ fun _switch () ->
+  Alcotest_lwt.test_case "set local ref" `Quick @@ fun _switch () ->
   let open Lwt.Infix in
-  let module Sync = Git.Mem.Sync (Git.Mem.Store) (Git_cohttp_unix) in
+  let module Sync = Git.Mem.Sync (Git.Mem.Store) in
   let capabilities = [ `Side_band_64k ] in
   let head = Git.Reference.v "HEAD" in
   let empty_branch = Git.Reference.v "refs/heads/empty" in
   let master_branch = Git.Reference.v "refs/heads/master" in
   let payloads = empty_repository_fetch in
-  let ctx = ctx_with_payloads payloads in
+  let ctx = ctx_with_payloads (payloads, ignore) in
   Git.Mem.Store.v (Fpath.v "/")
   >|= store_err
   >>? (fun store ->
@@ -342,7 +378,7 @@ let test_sync_fetch () =
 
 (* XXX(dinosaure): [tmp] without systemic deletion of directories. *)
 
-module Git = Smart_git.Make (Scheduler) (Append) (Append) (HTTP) (Uid) (Ref)
+module Git_sync = Smart_git.Make (Scheduler) (Append) (Append) (Uid) (Ref)
 
 (* TODO(dinosaure): we don't check what we sent, we should check that. *)
 
@@ -358,13 +394,13 @@ let test_empty_clone () =
       ( Fpath.(path / ".git" / "objects" / "pack"),
         Fpath.(path / ".git" / "objects" / "pack") )
     in
-    let ctx = ctx_with_payloads payloads in
+    let ctx = ctx_with_payloads (payloads, ignore) in
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.fetch ~ctx ~capabilities access store endpoint
+    Git_sync.fetch ~ctx ~capabilities access store endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -387,14 +423,14 @@ let test_simple_clone () =
       ( Fpath.(path / ".git" / "objects" / "pack"),
         Fpath.(path / ".git" / "objects" / "pack") )
     in
-    let ctx = ctx_with_payloads payloads in
+    let ctx = ctx_with_payloads (payloads, ignore) in
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.fetch ~ctx ~capabilities access store endpoint `All pack index ~src:tmp0
-      ~dst:tmp1 ~idx:tmp2
+    Git_sync.fetch ~ctx ~capabilities access store endpoint `All pack index
+      ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
   | Ok (`Pack _) -> Lwt.return_unit
@@ -407,9 +443,8 @@ let create_new_git_push_store _sw =
   let create () =
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
-    OS.Dir.tmp "git-%s" >>= fun root ->
-    OS.Dir.with_current root (fun () -> OS.Cmd.run Cmd.(v "git" % "init")) ()
-    |> R.join
+    create_tmp_dir "git-%s" >>= fun root ->
+    OS.Dir.with_current root git_init_with_branch "master" |> R.join
     >>= fun () ->
     let access =
       Sigs.
@@ -483,15 +518,16 @@ let test_simple_push () =
         "\x6b\x20\x6f\x6b\x0a\x30\x30\x31\x39\x6f\x6b\x20\x72\x65\x66\x73"
         (* k ok.0019ok refs *);
         "\x2f\x68\x65\x61\x64\x73\x2f\x6d\x61\x73\x74\x65\x72\x0a\x30\x30"
-        (* /heads/master.00 *); "\x30\x30\x30\x30\x30\x30" (* 000000 *);
+        (* /heads/master.00 *);
+        "\x30\x30\x30\x30\x30\x30" (* 000000 *);
       ]
     in
     create_new_git_push_store sw >>= fun (access, store) ->
     commit_foo store >>= fun _head ->
-    let ctx = ctx_with_payloads payloads in
+    let ctx = ctx_with_payloads (payloads, ignore) in
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.push ~ctx ~capabilities access store endpoint
+    Git_sync.push ~ctx ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
   in
   run () >>= function
@@ -524,10 +560,10 @@ let test_push_error () =
       ]
     in
     create_new_git_push_store sw >>= fun (access, store) ->
-    let ctx = ctx_with_payloads payloads in
+    let ctx = ctx_with_payloads (payloads, ignore) in
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.push ~ctx ~capabilities access store endpoint
+    Git_sync.push ~ctx ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
   in
   run () >>= function
@@ -551,14 +587,14 @@ let test_fetch_empty () =
       ( Fpath.(path / ".git" / "objects" / "pack"),
         Fpath.(path / ".git" / "objects" / "pack") )
     in
-    let ctx = ctx_with_payloads payloads in
+    let ctx = ctx_with_payloads (payloads, ignore) in
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.fetch ~ctx ~capabilities access store endpoint `All pack index ~src:tmp0
-      ~dst:tmp1 ~idx:tmp2
+    Git_sync.fetch ~ctx ~capabilities access store endpoint `All pack index
+      ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
     | `Empty -> Alcotest.fail "Unexpected empty fetch"
     | `Pack (uid, refs) ->
@@ -644,14 +680,14 @@ let test_fetch_empty () =
             (* ds/master.0000 *);
           ]
         in
-        let ctx = ctx_with_payloads payloads in
+        let ctx = ctx_with_payloads (payloads, ignore) in
         OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
         OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
         OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Smart_git.Endpoint.of_string "git://localhost/not-found.git"
         |> Lwt.return
         >>? fun endpoint ->
-        Git.fetch ~ctx ~capabilities access store endpoint `All pack index
+        Git_sync.fetch ~ctx ~capabilities access store endpoint `All pack index
           ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
@@ -1087,14 +1123,14 @@ let test_negotiation () =
     |> Lwt.return
     >>? fun () ->
     update_testzone_0 store >>? fun () ->
-    let ctx = ctx_with_payloads payloads in
+    let ctx = ctx_with_payloads (payloads, ignore) in
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.fetch ~ctx ~capabilities access store endpoint `All pack index ~src:tmp0
-      ~dst:tmp1 ~idx:tmp2
+    Git_sync.fetch ~ctx ~capabilities access store endpoint `All pack index
+      ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
   | Ok (`Pack _) -> Lwt.return_unit
@@ -1184,7 +1220,7 @@ let test_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint
+    Git_sync.fetch ~ctx ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1268,7 +1304,7 @@ let test_negotiation_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint
+    Git_sync.fetch ~ctx ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1285,7 +1321,7 @@ let run_git_receive_pack store ic oc =
     OS.Dir.with_current path @@ fun () ->
     let tee = Cmd.(v "tee" % Fpath.to_string ic) in
     let cat = Cmd.(v "cat" % Fpath.to_string oc) in
-    let git_receive_pack = Cmd.(v "git-receive-pack" % Fpath.to_string path) in
+    let git_receive_pack = Cmd.(v "git-receive-pack" % ".") in
     let pipe () =
       OS.Cmd.run
         Cmd.(
@@ -1351,7 +1387,7 @@ let test_push_ssh () =
     let ctx = ctx_with_fifo ic_fifo oc_fifo in
     Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.push ~ctx ~capabilities access store1 endpoint
+    Git_sync.push ~ctx ~capabilities access store1 endpoint
       [ `Update (Ref.v "refs/heads/master", Ref.v "refs/heads/master") ]
     >>? fun () ->
     let { path; _ } = store_prj store0 in
@@ -1387,8 +1423,6 @@ let load_file filename =
   close_in ic;
   Bytes.unsafe_to_string rs
 
-let http_resolver queue = HTTP.set_payloads queue
-
 let test_negotiation_http () =
   Alcotest_lwt.test_case "fetch over http" `Quick @@ fun sw () ->
   let open Lwt.Infix in
@@ -1418,12 +1452,43 @@ let test_negotiation_http () =
     OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "http://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    let queue = Queue.create () in
-    Queue.push (load_file "GET") queue;
-    Queue.push (load_file "POST") queue;
-    let () = http_resolver queue in
-    Git.fetch ~ctx:Mimic.empty ~capabilities access store endpoint `All pack
-      index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+    let advertised_refs = load_file "GET" in
+    let clone = load_file "POST" in
+    let fake_http_edn, fake_http =
+      Mimic.register ~name:"fake-http" (module HTTP)
+    in
+    let handshake ~uri0:_ ~uri1:_ flow =
+      let module M = (val Mimic.repr fake_http) in
+      match flow with
+      | M.T flow ->
+          flow.state <- Get;
+          Lwt.return_unit
+      | _ -> Lwt.return_unit
+    in
+    let k0 git_scheme git_transmission =
+      match git_scheme, git_transmission with
+      | (`HTTP | `HTTPS), `HTTP _ -> Lwt.return_some (advertised_refs, clone)
+      | _ -> Lwt.return_none
+    in
+    let k1 git_scheme =
+      match git_scheme with
+      | `HTTP | `HTTPS ->
+          Lwt.return_some
+            (`HTTP (Uri.of_string "http://localhost/not-found.git", handshake))
+      | _ -> Lwt.return_none
+    in
+    let ctx =
+      Mimic.fold fake_http_edn
+        Mimic.Fun.[ req Smart_git.git_scheme; req Smart_git.git_transmission ]
+        ~k:k0 Mimic.empty
+    in
+    let ctx =
+      Mimic.fold Smart_git.git_transmission
+        Mimic.Fun.[ req Smart_git.git_scheme ]
+        ~k:k1 ctx
+    in
+    Git_sync.fetch ~ctx ~capabilities access store endpoint `All pack index
+      ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
   | Ok (`Pack _) -> Lwt.return_unit
@@ -1475,7 +1540,7 @@ let test_partial_clone_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+    Git_sync.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1497,7 +1562,6 @@ let test_partial_fetch_ssh () =
   Alcotest_lwt.test_case "partial fetch" `Quick @@ fun sw () ->
   let open Lwt.Infix in
   let fill0 () =
-    let open Bos in
     create_new_git_store sw >>= fun (access, store) ->
     let { path; _ } = store_prj store in
     let fiber =
@@ -1515,7 +1579,6 @@ let test_partial_fetch_ssh () =
     Lwt.return_ok (access, store)
   in
   let fill1 store =
-    let open Bos in
     let { path; _ } = store_prj store in
     let fiber =
       let open Rresult in
@@ -1556,7 +1619,7 @@ let test_partial_fetch_ssh () =
     in
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+    Git_sync.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1605,7 +1668,8 @@ let test_partial_fetch_ssh () =
         OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Logs.app (fun m -> m "Waiting git-upload-pack.");
         Logs.app (fun m -> m "Start to fetch repository with SSH.");
-        Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+        Git_sync.fetch ~ctx ~capabilities access store1 endpoint
+          ~deepen:(`Depth 1)
           (`Some [ Ref.v "HEAD" ])
           pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
         >>? function
@@ -1623,16 +1687,17 @@ let test_partial_fetch_ssh () =
   | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let make_one_commit path =
-  Bos.OS.Dir.with_current path @@ fun () ->
-  Bos.OS.File.write Fpath.(v "foo") "" >>= fun () ->
-  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "add" % "foo") >>= fun () ->
-  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () -> R.ok ()
+  OS.Dir.with_current path @@ fun () ->
+  OS.Cmd.run Cmd.(v "git" % "config" % "user.name" % "test") >>= fun () ->
+  OS.Cmd.run Cmd.(v "git" % "config" % "user.email" % "pseudo@peudo.invalid")
+  >>= fun () ->
+  OS.File.write Fpath.(v "foo") "" >>= fun () ->
+  OS.Cmd.run Cmd.(v "git" % "add" % "foo") >>= fun () ->
+  OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () -> R.ok ()
 
 let test_push_empty () =
   Alcotest_lwt.test_case "push to empty over ssh" `Quick @@ fun sw () ->
   let open Lwt.Infix in
-  (* XXX(dinosaure): This test does not require SSH but the underlying process
-     is a call to [git-upload-pack]. We do the same without encryption. *)
   let run () =
     create_new_git_store sw >>= fun (_access, store0) ->
     with_fifo "git-receive-pack-ic-%s" |> Lwt.return >>? fun ic_fifo ->
@@ -1646,7 +1711,7 @@ let test_push_empty () =
     let ctx = ctx_with_fifo ic_fifo oc_fifo in
     Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.push ~ctx ~capabilities access store1 endpoint
+    Git_sync.push ~ctx ~capabilities access store1 endpoint
       [ `Update (Ref.v "refs/heads/master", Ref.v "refs/heads/master") ]
   in
   run () >>= function
@@ -1654,6 +1719,89 @@ let test_push_empty () =
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
   | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
+
+let simple_push =
+  [
+    "008e0000000000000000000000000000000000000000 \
+     refs/heads/master\000report-status delete-refs side-band-64k quiet atomic \
+     ofs-delta agent=git/2.27.0";
+    "0000";
+  ]
+
+let capability = Alcotest.testable Smart.Capability.pp Smart.Capability.equal
+
+let test_push_capabilities () =
+  Alcotest_lwt.test_case "push capabilities" `Quick @@ fun _sw () ->
+  let open Lwt.Infix in
+  let module Sync = Git.Mem.Sync (Git.Mem.Store) in
+  let output = ref None in
+  let ctx =
+    ctx_with_payloads ~transmission:`Exec
+      (simple_push, fun v -> output := Some v)
+  in
+  let capabilities =
+    [
+      `Side_band_64k;
+      `Multi_ack_detailed;
+      `Thin_pack;
+      `Ofs_delta;
+      `Agent "ocaml-git";
+    ]
+  in
+  let author =
+    {
+      Git.User.name = "Romain Calascibetta";
+      email = "romain.calascibetta@gmail.com";
+      date =
+        (let ptime = Ptime.unsafe_of_d_ps (Ptime_clock.now_d_ps ()) in
+         let tz =
+           match Ptime_clock.current_tz_offset_s () with
+           | Some s ->
+               let sign = if s < 0 then `Minus else `Plus in
+               let hours = s / 3600 in
+               let minutes = s mod 3600 / 60 in
+               Some { Git.User.sign; hours; minutes }
+           | None -> None
+         in
+         Int64.of_float (Ptime.to_float_s ptime), tz);
+    }
+  in
+  let tree0 = Git.Mem.Store.Value.(tree (Tree.v [])) in
+  let commit0 root =
+    Git.Mem.Store.Value.(
+      commit
+        (Commit.make ~parents:[] ~tree:root ~author ~committer:author (Some ".")))
+  in
+  let fiber =
+    Git.Mem.Store.v (Fpath.v "/") >|= store_err >>? fun store ->
+    Git.Mem.Store.write store tree0 >|= store_err >>? fun (root, _) ->
+    Git.Mem.Store.write store (commit0 root) >|= store_err
+    >>? fun (commit, _) ->
+    Git.Mem.Store.Ref.write store Git.Reference.master
+      (Git.Reference.uid commit)
+    >|= store_err
+    >>? fun _ ->
+    Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
+    >>? fun endpoint ->
+    Sync.push ~ctx ~capabilities endpoint store
+      [ `Update (Git.Reference.master, Git.Reference.master) ]
+    >|= sync_err
+  in
+  fiber >>= function
+  | Ok () -> (
+      let[@warning "-8"] (Some v) = !output in
+      let decoder = Pkt_line.Decoder.of_string (Cstruct.to_string v) in
+      let ctx = Smart.Context.with_decoder ~client_caps:capabilities decoder in
+      match Smart.recv ctx Smart.recv_commands with
+      | Smart.Return (Some v) ->
+          let c = Smart.Commands.capabilities v in
+          Alcotest.(check (list capability)) "capabilities" c capabilities;
+          Lwt.return_unit
+      | _ -> Alcotest.failf "Cannot parse: %S" (Cstruct.to_string v))
+  | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+  | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error (`Sync err) -> Alcotest.failf "%a" Sync.pp_error err
+  | Error (`Store err) -> Alcotest.failf "%a" Git.Mem.Store.pp_error err
 
 let update_testzone_1 store =
   let { path; _ } = store_prj store in
@@ -1831,11 +1979,21 @@ let test =
     [
       ( "regression",
         [
-          test_empty_clone (); test_simple_clone (); test_simple_push ();
-          test_push_error (); test_fetch_empty (); test_negotiation ();
-          test_ssh (); test_negotiation_ssh (); test_push_ssh ();
-          test_negotiation_http (); test_partial_clone_ssh ();
-          test_partial_fetch_ssh (); test_sync_fetch (); test_push_empty ();
+          test_empty_clone ();
+          test_simple_clone ();
+          test_simple_push ();
+          test_push_error ();
+          test_fetch_empty ();
+          test_negotiation ();
+          test_ssh ();
+          test_negotiation_ssh ();
+          test_push_ssh ();
+          test_negotiation_http ();
+          test_partial_clone_ssh ();
+          test_partial_fetch_ssh ();
+          test_sync_fetch ();
+          test_push_empty ();
+          test_push_capabilities ();
         ] );
       ( "protocol-v2",
         Proto_v2.

@@ -3,7 +3,10 @@ let src =
     ~doc:"logs git-unix's packed-refs event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Unix_scheduler = Carton.Make (struct type 'a t = 'a end)
+
+module Unix_scheduler = Carton.Make (struct
+  type 'a t = 'a
+end)
 
 let scheduler =
   let open Unix_scheduler in
@@ -21,7 +24,7 @@ let load ~of_hex dotgit =
     close_in ic;
     Unix_scheduler.prj rs
   with exn ->
-    Log.warn (fun m ->
+    Log.debug (fun m ->
         m "Got an error when we tried to load the packed-refs: %S."
           (Printexc.to_string exn));
     []

@@ -156,6 +156,7 @@ module Dec : sig
       threads:int ->
       map:'fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       ('fd, Uid.t) t ->
       matrix:status array ->
       unit Lwt.t
@@ -220,7 +221,7 @@ module Enc : sig
     type b = Carton.Enc.N.b = {
       i : Bigstringaf.t;
       q : De.Queue.t;
-      w : De.window;
+      w : De.Lz77.window;
     }
 
     val encoder : b:b -> load:'uid load -> 'uid q -> encoder Lwt.t
@@ -231,7 +232,7 @@ module Enc : sig
   type b = Carton.Enc.b = {
     i : Bigstringaf.t;
     q : De.Queue.t;
-    w : De.window;
+    w : De.Lz77.window;
     o : Bigstringaf.t;
   }
 
@@ -254,7 +255,7 @@ module Thin : sig
 
   module Make (Uid : Carton.UID) : sig
     type ('t, 'path, 'fd, 'error) fs = {
-      create : 't -> 'path -> ('fd, 'error) result Lwt.t;
+      create : ?trunc:bool -> 't -> 'path -> ('fd, 'error) result Lwt.t;
       append : 't -> 'fd -> string -> unit Lwt.t;
       map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t;
       close : 't -> 'fd -> (unit, 'error) result Lwt.t;

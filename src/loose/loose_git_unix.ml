@@ -27,7 +27,7 @@ module Make (Uid : UID) = struct
       in
       let fd = Unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o644 in
       let rs =
-        Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+        Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
       in
       Unix.close fd;
       Lwt.return (Bigarray.array1_of_genarray rs)

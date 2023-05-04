@@ -94,6 +94,7 @@ module Fp (Uid : UID) = struct
   let src_rem = i_rem
   let eoi d = { d with i = Bigstringaf.empty; i_pos = 0; i_len = min_int }
   let malformedf fmt = Fmt.kstr (fun err -> `Malformed err) fmt
+  let ctx { ctx; _ } = ctx
 
   let src d s j l =
     if j < 0 || l < 0 || j + l > Bigstringaf.length s then
@@ -564,26 +565,31 @@ module Fp (Uid : UID) = struct
 end
 
 module W = struct
-  type 'fd t = { mutable cur : int; w : slice Weak.t; m : int; fd : 'fd }
+  type 'fd t = {
+    mutable cur : int;
+    w : slice Weak.t;
+    m : int;
+    fd : 'fd;
+    sector : int64;
+  }
 
   and slice = { offset : int64; length : int; payload : Bigstringaf.t }
-
   and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
-  let make fd = { cur = 0; w = Weak.create (0xffff + 1); m = 0xffff; fd }
+  let make ?(sector = 4096L) fd =
+    { cur = 0; w = Weak.create (0xffff + 1); m = 0xffff; fd; sector }
+
   let reset { w; _ } = Weak.fill w 0 (Weak.length w) None
+  let sector { sector; _ } = sector
 
   (* XXX(dinosaure): memoization. *)
 
-  let window_length = Int64.mul 1024L 1024L
-  let length = window_length
-
   let heavy_load : type fd. map:fd map -> fd t -> int64 -> slice option =
    fun ~map t w ->
-    let pos = Int64.(div w window_length) in
-    let pos = Int64.(mul pos window_length) in
+    let pos = Int64.(div w t.sector) in
+    let pos = Int64.(mul pos t.sector) in
 
-    let payload = map t.fd ~pos (1024 * 1024) in
+    let payload = map t.fd ~pos (Int64.to_int t.sector) in
     let slice =
       Some { offset = pos; length = Bigstringaf.length payload; payload }
     in
@@ -616,6 +622,9 @@ module W = struct
     with Found -> !slice
 end
 
+type raw = { raw0 : Bigstringaf.t; raw1 : Bigstringaf.t; flip : bool }
+type v = { kind : kind; raw : raw; len : int; depth : int }
+
 type ('fd, 'uid) t = {
   ws : 'fd W.t;
   fd : 'uid -> int64;
@@ -633,14 +642,15 @@ let fd { ws = { W.fd; _ }; _ } = fd
 let make :
     type fd uid.
     fd ->
+    ?sector:int64 ->
     z:Bigstringaf.t ->
     allocate:(int -> Zl.window) ->
     uid_ln:int ->
     uid_rw:(string -> uid) ->
     (uid -> int64) ->
     (fd, uid) t =
- fun fd ~z ~allocate ~uid_ln ~uid_rw where ->
-  { ws = W.make fd; fd = where; uid_ln; uid_rw; tmp = z; allocate }
+ fun fd ?sector ~z ~allocate ~uid_ln ~uid_rw where ->
+  { ws = W.make ?sector fd; fd = where; uid_ln; uid_rw; tmp = z; allocate }
 
 type weight = int
 
@@ -834,6 +844,19 @@ let rec weight_of_ref_delta :
     weight =
  fun ~map t ~weight ?(visited = []) ~cursor slice ->
   let uid, pos, slice = header_of_ref_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [weight_of_ref_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let weight =
     weight_of_delta ~map t ~weight
       ~cursor:Int64.(add slice.W.offset (of_int pos))
@@ -853,6 +876,19 @@ and weight_of_ofs_delta :
     weight =
  fun ~map t ~weight ?(visited = []) ~anchor ~cursor slice ->
   let base_offset, pos, slice = header_of_ofs_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [weight_of_ofs_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let weight =
     weight_of_delta ~map t ~weight
       ~cursor:Int64.(add slice.W.offset (of_int pos))
@@ -915,9 +951,6 @@ let length_of_offset : type fd uid. map:fd W.map -> (fd, uid) t -> int64 -> int
       let _, size, _, _ = header_of_entry ~map t cursor slice in
       size
 
-type raw = { raw0 : Bigstringaf.t; raw1 : Bigstringaf.t; flip : bool }
-type v = { kind : kind; raw : raw; len : int; depth : int }
-
 let v ~kind ?(depth = 1) raw =
   let len = Bigstringaf.length raw in
   {
@@ -944,6 +977,29 @@ let flip t = { t with flip = not t.flip }
 let raw { raw; _ } = get_payload raw
 let len { len; _ } = len
 let depth { depth; _ } = depth
+
+let copy ?(flip = false) ?weight v =
+  let weight =
+    match weight with
+    | Some weight -> weight
+    | None -> Bigstringaf.length v.raw.raw0
+  in
+  let raw = Bigstringaf.create (weight * 2) in
+  Bigstringaf.unsafe_blit v.raw.raw0 ~src_off:0 raw ~dst_off:0
+    ~len:(Bigstringaf.length v.raw.raw0);
+  Bigstringaf.unsafe_blit v.raw.raw1 ~src_off:0 raw ~dst_off:weight
+    ~len:(Bigstringaf.length v.raw.raw1);
+  {
+    kind = v.kind;
+    raw =
+      {
+        raw0 = Bigstringaf.sub raw ~off:0 ~len:weight;
+        raw1 = Bigstringaf.sub raw ~off:weight ~len:weight;
+        flip = (if not flip then v.raw.flip else not v.raw.flip);
+      };
+    len = v.len;
+    depth = v.depth;
+  }
 
 let uncompress :
     type fd uid.
@@ -1043,6 +1099,19 @@ let rec of_ofs_delta :
     v =
  fun ~map t raw ~anchor ~cursor slice ->
   let base_offset, pos, slice = header_of_ofs_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [of_ofs_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let v =
     of_offset ~map t (flip raw) ~cursor:Int64.(sub anchor (of_int base_offset))
   in
@@ -1055,6 +1124,19 @@ and of_ref_delta :
     map:fd W.map -> (fd, uid) t -> raw -> cursor:int64 -> W.slice -> v =
  fun ~map t raw ~cursor slice ->
   let uid, pos, slice = header_of_ref_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [of_ref_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let v = of_uid ~map t (flip raw) uid in
   of_delta ~map t v.kind raw ~depth:(succ v.depth)
     ~cursor:Int64.(add slice.W.offset (of_int pos))
@@ -1278,6 +1360,11 @@ let of_offset_with_path :
   in
   if path.depth > 1 then go (path.depth - 1) (flip raw) else base
 
+let of_offset_with_source :
+    type fd uid. map:fd W.map -> (fd, uid) t -> v -> cursor:int64 -> v =
+ fun ~map t { kind; raw; depth; _ } ~cursor ->
+  of_offset_with_source ~map t kind raw ~depth ~cursor
+
 type 'uid digest = kind:kind -> ?off:int -> ?len:int -> Bigstringaf.t -> 'uid
 
 let uid_of_offset :
@@ -1390,7 +1477,6 @@ let uid_of_offset_with_source :
       | _ -> assert false)
 
 type 'uid node = Node of int64 * 'uid * 'uid node list | Leaf of int64 * 'uid
-
 and 'uid tree = Base of kind * int64 * 'uid * 'uid node list
 
 type 'uid children = cursor:int64 -> uid:'uid -> int64 list
@@ -1464,13 +1550,14 @@ struct
       type fd.
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       kind:kind ->
       raw ->
       depth:int ->
       cursors:int64 list ->
       Uid.t node list =
-   fun ~map ~oracle t ~kind raw ~depth ~cursors ->
+   fun ~map ~oracle ~verbose t ~kind raw ~depth ~cursors ->
     match cursors with
     | [] -> []
     | [ cursor ] -> (
@@ -1478,11 +1565,12 @@ struct
           uid_of_offset_with_source ~map ~digest:oracle.digest t ~kind raw
             ~depth ~cursor
         in
+        verbose ();
         match oracle.children ~cursor ~uid with
         | [] -> [ Leaf (cursor, uid) ]
         | cursors ->
             let nodes =
-              nodes_of_offsets ~map ~oracle t ~kind (flip raw)
+              nodes_of_offsets ~map ~oracle ~verbose t ~kind (flip raw)
                 ~depth:(succ depth) ~cursors
             in
             [ Node (cursor, uid, nodes) ])
@@ -1500,11 +1588,12 @@ struct
               uid_of_offset_with_source ~map ~digest:oracle.digest t ~kind raw
                 ~depth ~cursor
             in
+            verbose ();
             match oracle.children ~cursor ~uid with
             | [] -> res.(i) <- Leaf (cursor, uid)
             | cursors ->
                 let nodes =
-                  nodes_of_offsets ~map ~oracle t ~kind (flip raw)
+                  nodes_of_offsets ~map ~oracle ~verbose t ~kind (flip raw)
                     ~depth:(succ depth) ~cursors
                 in
                 Bigstringaf.blit source ~src_off:0 (get_source raw) ~dst_off:0
@@ -1533,10 +1622,11 @@ struct
       type fd.
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       cursor:int64 ->
       Uid.t tree =
-   fun ~map ~oracle t ~cursor ->
+   fun ~map ~oracle ~verbose t ~cursor ->
     let weight = weight_of_tree ~cursor oracle in
     let raw = make_raw ~weight in
     (* allocation *)
@@ -1554,7 +1644,8 @@ struct
           else raw
         in
         let nodes =
-          nodes_of_offsets ~map ~oracle t ~kind (flip raw) ~depth:1 ~cursors
+          nodes_of_offsets ~map ~oracle ~verbose t ~kind (flip raw) ~depth:1
+            ~cursors
         in
         Base (kind, cursor, uid, nodes)
 
@@ -1562,13 +1653,14 @@ struct
       type fd.
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       cursor:int64 ->
       matrix:status array ->
       unit =
-   fun ~map ~oracle t ~cursor ~matrix ->
+   fun ~map ~oracle ~verbose t ~cursor ~matrix ->
     let (Base (kind, cursor, uid, children)) =
-      resolver ~map ~oracle t ~cursor
+      resolver ~map ~oracle ~verbose t ~cursor
     in
     matrix.(oracle.where ~cursor) <- Resolved_base (cursor, uid, kind);
     let rec go depth source = function
@@ -1590,6 +1682,10 @@ struct
     | Unresolved_base _ | Unresolved_node -> false
     | Resolved_base _ | Resolved_node _ -> true
 
+  let is_base = function
+    | Unresolved_base _ | Resolved_base _ -> true
+    | _ -> false
+
   let unresolved_base ~cursor = Unresolved_base cursor
   let unresolved_node = Unresolved_node
 
@@ -1598,11 +1694,12 @@ struct
       i:int ->
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       matrix:status array ->
       mutex:m ->
       unit IO.t =
-   fun ~i:_ ~map ~oracle t ~matrix ~mutex ->
+   fun ~i:_ ~map ~oracle ~verbose t ~matrix ~mutex ->
     let rec go () =
       IO.Mutex.lock mutex.m >>= fun () ->
       while
@@ -1617,10 +1714,11 @@ struct
         let root = mutex.v in
         mutex.v <- mutex.v + 1;
         IO.Mutex.unlock mutex.m;
-        let[@warning "-8"] (Unresolved_base cursor) = matrix.(root) in
-        (* XXX(dinosaure): Oh god, save me! *)
-        IO.detach (fun () -> update ~map ~oracle t ~cursor ~matrix)
-        >>= fun () -> (go [@tailcall]) ()
+        match matrix.(root) with
+        | Unresolved_base cursor ->
+            IO.detach (fun () -> update ~map ~oracle ~verbose t ~cursor ~matrix)
+            >>= fun () -> (go [@tailcall]) ()
+        | _ -> assert false
     in
     go ()
 
@@ -1629,21 +1727,26 @@ struct
       threads:int ->
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       matrix:status array ->
       unit IO.t =
-   fun ~threads ~map ~oracle t0 ~matrix ->
+   fun ~threads ~map ~oracle ~verbose t0 ~matrix ->
     let mutex = { v = 0; m = IO.Mutex.create () } in
 
     IO.parallel_iter
-      ~f:(fun (i, t) -> dispatcher ~i ~map ~oracle t ~matrix ~mutex)
+      ~f:(fun (i, t) -> dispatcher ~i ~map ~oracle ~verbose t ~matrix ~mutex)
       (List.init threads (fun th ->
            let z =
              Bigstringaf.copy t0.tmp ~off:0 ~len:(Bigstringaf.length t0.tmp)
            in
            ( th,
-             { t0 with ws = W.make t0.ws.W.fd; tmp = z; allocate = t0.allocate }
-           )))
+             {
+               t0 with
+               ws = W.make ~sector:t0.ws.sector t0.ws.W.fd;
+               tmp = z;
+               allocate = t0.allocate;
+             } )))
 end
 
 module Ip

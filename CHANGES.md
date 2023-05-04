@@ -1,3 +1,153 @@
+### 3.13.0 (2023-03-24) Paris - France
+
+- Update tests with `mirage-crypto-rng` (@Zimmi48, #612)
+- Update to `awa.0.2.0` (@hannesm, #613)
+
+### 3.12.0 (2023-02-13) Paris - France
+
+- Export a new function to close file-descriptors for PACK file (for git-unix)
+  (@dinosaure, @emillon, @moyodiallo, #590)
+
+### 3.11.0 (2023-01-10) Paris - France
+
+- Limit the stream between the incoming flow and the PACK analyzer
+  It will bind the analyze with the I/O throughput (@dinosaure, #608)
+- Remove OCaml 5.0.0 warnings (@samoht, #609)
+
+### 3.10.1 (2022-12-07) Paris - France
+
+- Add the NixOS CI to test `ocaml-git` (@Et7f3, #600, #473)
+- Specify few more headers fields when we fetch/push via HTTP (@reynir, @hannesm, @dinosaure, #603, #601)
+- Improve the error message about `Smart_git.Endpoint.of_string` (@reynir, @dinosaure, #605, #604)
+
+### 3.10.0 (2022-10-19) Paris - France
+
+- Do not append a leading slash to path (#580, @reynir, @dinosaure)
+- Fix some typos (#585, @hannesm, @dinosaure)
+- Add the `main` reference (#586, @hannesm, @dinosaure)
+- Upgrade `git-paf` with `paf.0.2.0` (#587, @dinosaure)
+- Explain when the user give a bad argument about TLS authenticator (#593, reported by @reynir #582, @dinosaure)
+- Use `x509.0.16.2` which raise an explanation if it's a bad argument (#594, @hannesm, @dinosaure)
+
+### 3.9.1 (2022-04-11) Paris - France
+
+- Remove `bigarray-compat` package and `mmap` (@dinosaure, @hannesm)
+- Fix the push process with a copy of illegal shared bigarray (@dinosaure, #569)
+
+### 3.9.0 (2022-03-24) Paris - France
+
+- Fix `ocaml-git` with OCaml 5.00.0 (@dinosaure, @stedolan, #559)
+- Update binaries with `cmdliner.1.1.0` (@MisterDA, @dinosaure, #558)
+- Fix the `reset` function and properly delete PACK files (@dinosaure, @patricoferris, @dinakajoy, #561)
+- Fix dependencies of `guit` (@maiste, @dinosaure, #560)
+- Move the `happy-eyeballs` layer needed by MirageOS into `mimic.0.0.5` (@dinosaure, #563)
+
+### 3.8.1 (2022-04-08) Paris - France
+
+- Fix the push process with a copy of illegal shared bigarray (@dinosaure, 5e5392f)
+
+### 3.8.0 (2022-02-03) Paris - France
+
+- Adapt `git-mirage` with `awa.0.1.0` (@hannesm, #553)
+- Support new version of `git` into tests (@dinosaure, #532, #554)
+- Provide `Store.read_opt` for finding Git object (@CraigFe, #551)
+- Unify `git-mirage-http` and `git-mirage-ssh` about the _authenticator_ (@dinosaure, @hannesm, #538, #555)
+
+### 3.7.1 (2022-04-07) Paris - France
+
+- Fix the push process with a copy of illegal shared bigarray (@dinosaure, 2aeb677)
+
+### 3.7.0 (2021-12-12) Paris - France
+
+- Drop unneeded `mirage-protocols` dependency (@hannesm, #537)
+- Delete HTTP functor and use happy-eyeballs (@dinosaure, #539)
+- Be compatible with `mirage-protocols.7.0.0` (@dinosaure, #541)
+- Use `Lwt.pause` instead of `Lwt_unix.yield` (@dinosaure, #542)
+- Link with logs and `logs.fmt` (@MisterDA, #544)
+
+### 3.6.0 (2021-10-20) Paris - France
+
+- Fix the documentation (@dinosaure, #534)
+- Remove some output from Git when we initialize a Git repository (@dinosaure, #534)
+- Fix `fmt` deprecation functions (@dinosaure, #534)
+- Use a warning instead of an error when a reference does not exists (@zshipko, @dinosaure, #533)
+- Use the last version of `dns` (6.0.0) (@dinosaure, @hannesm, #531)
+
+### 3.5.0 (2021-09-08) Paris - France
+
+- Fix compilation of benchmarks (@dinosaure, #516)
+- Remove `paf.cohttp` dependency from MirageOS stack (@dinosaure, #519)
+- Use `Cstruct.length` instead of `Cstruct.len` (@dinosaure. #522)
+- Update to `tls.0.14.0` (@dinosaure, #529)
+
+### 3.4.0 (2021-22-04) Paris - France
+
+- Fix several issues on `git-unix` (@dinosaure, @sternenseemann, #488)
+- Fix set of references by `git-unix` (@dinosaure, @jnavila, #490, #489)
+- Remove dependency with `curl` (@dinosaure, #491)
+- Provide `Git_unix.ctx` (@dinosaure, #493)
+- Update the plumbing between `carton.0.4.1` and `git` (@dinosaure, #493)
+- Expose information used by `Git_unix` to start a connection (@dinosaure, #498)
+- Add missing `fmt` and `logs` on several `dune` files (@CraigFe, @dinosaure, #499)
+- Be able to pass threads argument when we fetch (@dinosaure, #500)
+- Fix documentation on `search.ml` (@dinosaure, #501)
+- Be compatible with `alcotest.1.4.0` (@dinosaure, #504)
+- Delete `mimic` from the distribution (now available on https://github.com/dinosaure/mimic)
+  (@dinosaure, #505)
+- Fix temporary directories on unix tests (@dinosaure, #506)
+- Use the `non-stream` API of `decompress` for _loose_ objects (@clecat, @dinosaure, #502)
+- Use `git-paf` and `paf.0.0.2` instead of CoHTTP (@dinosaure, #508)
+- Don't try to download tags implicitely (@dinosaure, #507)
+- Fix bug about negotiation over HTTP connection (@dinosaure, #507)
+
+### 3.3.3 (2021-21-03) Paris - France
+
+- Fix stack-overflow on tree objects (@zshipko, @dinosaure, #485)
+
+### 3.3.2 (2021-15-03) Paris - France
+
+- Fix infinite loop when we don't have enough spaces for an
+  inflated output (#480, @dinosaure, @Ngoguey42)
+- Fix bug about ephemeron/`cstruct_append`/`O_TRUNC` (#481, @dinosaure)
+
+### 3.3.1 (2021-05-03) Paris - France
+
+- Fix tests on NixOS (@sternenseemann, #472)
+- Fix report status over git://, ssh:// and http(s):// with
+  side-band-64k and report-status capabilities (@dinosaure, @hannesm, #474)
+- Be sure that creation of a tree is tail-rec (@dinosaure, @zshipko, #476)
+- Update to decompress.1.3.0 (@dinosaure, #477)
+
+### 3.3.0 (2021-17-02) Paris - France
+
+- Fix tests when we push to an empty repository (#462, @dinosaure, @ulugbekna)
+- Fix new smart tests without a global git config (#463, @sternenseemann, @dinosaure)
+- Refactor tests (#464, @ulugbekna, @dinosaure)
+- Refactor `find_common.ml` (#465, @ulugbekna, @dinosaure)
+- Some preparation about Git protocol v2 (#466, @ulugbekna, @dinosaure)
+- Add HTTP/HTTPS support on the unikernel example (#467, @dinosaure)
+- Fix bug about push and capabilities (#468, @dinosaure, @hannesm, @ulugbekna)
+- Implement HTTP push and handle username & password in the given `Uri.t` (#469, @dinosaure)
+- **breaking changes**
+  Commit object must have a double LF to separate the header and the body. This format changes
+  hashes of commit and invalid old commits generated by `ocaml-git`. It seems that on the Git
+  side, the format is not fully respected - and it's why Git did not complain about that on our
+  tests for a long time.
+
+  However, `git fsck` does this check and an HTTP push to GitHub run `git fsck` at the end. To
+  be able to push (or run our _unikernel_ over HTTP/S), we must generate right commits.
+
+  So, we advise users to make a fake commit with Git (`git commit --allow-empty -m.`) on
+  repositories used by `ocaml-git` and fetch it with `depth:1`. Otherwise, this new version
+  of `ocaml-git` will refute older commits - due to the inherent isomorphism between
+  decoder/encoder in `ocaml-git`.
+
+  For Irmin users, this breaking changes does not change anything when `irmin` reformats correctly
+  the message to put the second LF. However, a breaking change exists on the API level when the
+  Git commit (and a Git tag) expects a `string option` now (instead of a simple `string).
+
+  For more details and tests, see #470 (@dinosaure)
+
 ### 3.2.0 (2021-06-02) Saint-Malo - France
 
 - Fix windows support (@dinosaure, #445)

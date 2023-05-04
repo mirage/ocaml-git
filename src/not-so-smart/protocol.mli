@@ -46,20 +46,8 @@ module Proto_request : sig
   type t
 
   val pp : t Fmt.t
-
-  val upload_pack :
-    host:[ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] ->
-    ?port:int ->
-    ?version:int ->
-    string ->
-    t
-
-  val receive_pack :
-    host:[ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] ->
-    ?port:int ->
-    ?version:int ->
-    string ->
-    t
+  val upload_pack : host:string -> ?port:int -> ?version:int -> string -> t
+  val receive_pack : host:string -> ?port:int -> ?version:int -> string -> t
 end
 
 module Want : sig
@@ -107,6 +95,7 @@ module Commands : sig
   val create : 'uid -> 'ref -> ('uid, 'ref) command
   val delete : 'uid -> 'ref -> ('uid, 'ref) command
   val update : 'uid -> 'uid -> 'ref -> ('uid, 'ref) command
+  val capabilities : ('uid, 'ref) t -> Capability.t list
 
   val v :
     capabilities:Capability.t list ->
@@ -115,6 +104,7 @@ module Commands : sig
     ('uid, 'ref) t
 
   val commands : ('uid, 'ref) t -> ('uid, 'ref) command list
+  val pp : 'uid Fmt.t -> 'ref Fmt.t -> ('uid, 'ref) t Fmt.t
 
   val map :
     fuid:('uid0 -> 'uid1) ->
@@ -132,7 +122,7 @@ end
 module Status : sig
   type 'ref t = private {
     result : (unit, string) result;
-    commands : ('ref, 'ref * string) result list;
+    commands : [ `FF of 'ref | `OK of 'ref | `ER of 'ref * string ] list;
   }
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
@@ -160,8 +150,10 @@ module Decoder : sig
     | `Invalid_ack of string
     | `Invalid_result of string
     | `Invalid_command_result of string
+    | `Invalid_command of string
+    | `Unexpected_pkt_line of string
     | `Unexpected_flush
-    | `Invalid_pkt_line ]
+    | `Invalid_pkt_line of string ]
 
   val pp_error : error Fmt.t
 
@@ -172,19 +164,27 @@ module Decoder : sig
 
   val decode_pack :
     ?side_band:bool ->
-    push_pack:(string * int * int -> unit) ->
     push_stdout:(string -> unit) ->
     push_stderr:(string -> unit) ->
     decoder ->
-    (bool, [> error ]) state
+    ( [ `Payload of string * int * int
+      | `End_of_transmission
+      | `Stdout
+      | `Stderr ],
+      [> error ] )
+    state
 
   val decode_negotiation : decoder -> (string Negotiation.t, [> error ]) state
   val decode_shallows : decoder -> (string Shallow.t list, [> error ]) state
+  val decode_flush : decoder -> (unit, [> error ]) state
 
   val decode_status :
     ?sideband:bool -> decoder -> (string Status.t, [> error ]) state
 
   val decode_packet : trim:bool -> decoder -> (string, [> error ]) state
+
+  val decode_commands :
+    decoder -> ((string, string) Commands.t option, [> error ]) state
 end
 
 module Encoder : sig

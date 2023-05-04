@@ -19,45 +19,34 @@ type 'a mode =
   | Wr : < wr : unit > mode
   | RdWr : < rd : unit ; wr : unit > mode
 
-type t = {
-  o0 : (key ref, Cstruct.t ref) Ephemeron.K1.t;
-  o1 : (key ref, Cstruct.t ref) Ephemeron.K1.t;
-  mutable which : bool;
-}
+type uid = < >
 
-and key = Key
+module Ephemeron = Ephemeron.K1.Make (struct
+  type t = uid
 
+  let equal = ( = )
+  let hash = Hashtbl.hash
+end)
+
+type t = { storage : (bool * Cstruct.t ref) Ephemeron.t; mutable which : bool }
 type +'a fiber = 'a Lwt.t
 type error = |
 
 let pp_error : error Fmt.t = fun _ppf -> function _ -> .
-
-let device () =
-  { o0 = Ephemeron.K1.create (); o1 = Ephemeron.K1.create (); which = false }
-
+let device () = { storage = Ephemeron.create 2; which = true }
 let empty = Cstruct.create 0
 
-let key tbl =
-  let value = ref Key in
-  if tbl.which then (
-    Ephemeron.K1.set_key tbl.o0 value;
-    Ephemeron.K1.set_data tbl.o0 (ref empty);
-    tbl.which <- not tbl.which;
-    value)
-  else (
-    Ephemeron.K1.set_key tbl.o1 value;
-    Ephemeron.K1.set_data tbl.o1 (ref empty);
-    tbl.which <- not tbl.which;
-    value)
-  [@@inline never]
-
-type uid = key ref
+let key device =
+  let file = object end in
+  Ephemeron.add device.storage file (device.which, ref empty);
+  device.which <- not device.which;
+  file
 
 type 'a fd = {
   mutable buffer : Cstruct.t;
   mutable capacity : int;
   mutable length : int;
-  which : bool;
+  uid : Ephemeron.key;
 }
 
 let enlarge fd more =
@@ -91,41 +80,26 @@ let enlarge fd more =
 
 (* XXX(dinosaure): use [Cstruct_cap]? I think we must prove capabilities
  * with [Refl]. *)
-let create ~mode:_ { o0; o1; _ } key =
-  let which, value =
-    let k0 =
-      Option.fold ~none:false
-        ~some:(fun key' -> key == key')
-        (Ephemeron.K1.get_key o0)
-    in
-    let k1 =
-      Option.fold ~none:false
-        ~some:(fun key' -> key == key')
-        (Ephemeron.K1.get_key o1)
-    in
-    assert (not (k0 && k1));
-    let value =
-      if k0 then Option.get (Ephemeron.K1.get_data o0)
-      else Option.get (Ephemeron.K1.get_data o1)
-    in
-    k0, value
-  in
+let create ?(trunc = true) ~mode:_ { storage; _ } uid =
+  let which, value = Ephemeron.find storage uid in
 
   let value =
-    if Cstruct.len !value < 1 then (
+    if Cstruct.length !value < 1 then (
       let v = Cstruct.create 1 in
       value := v;
       v)
     else !value
   in
 
-  Log.debug (fun m -> m "Make a new file-descriptor (%b)." which);
+  Log.debug (fun m ->
+      m "Make a new file-descriptor (%b) (%d byte(s))." which
+        (Cstruct.length value));
   let fd =
     {
       buffer = value;
-      capacity = Cstruct.len value;
-      length = 0 (* XXX(dinosaure): like Unix.O_TRUNC *);
-      which;
+      capacity = Cstruct.length value;
+      length = (if trunc then 0 else Cstruct.length value);
+      uid;
     }
   in
   Lwt.return_ok fd
@@ -142,54 +116,34 @@ let append _ fd str =
 let map _ fd ~pos len =
   Log.debug (fun m -> m "map on fd(length:%d) ~pos:%Ld %d." fd.length pos len);
   let pos = Int64.to_int pos in
-  if pos > fd.length then Bigstringaf.empty
+  if pos > Cstruct.length fd.buffer then Bigstringaf.empty
   else
-    let len = min len (fd.length - pos) in
+    let len = min len (Cstruct.length fd.buffer - pos) in
     let { Cstruct.buffer; off; _ } = fd.buffer in
-    Bigstringaf.sub ~off:(off + pos) ~len buffer
+    let res = Bigstringaf.sub ~off:(off + pos) ~len buffer in
+    res
 
-let close tbl fd =
+let close device fd =
   let result = Cstruct.sub fd.buffer 0 fd.length in
   Log.debug (fun m ->
-      m "Close the object into the cstruct-append heap (save %d bytes)."
+      m "Close the object into the cstruct-append heap (save %d bytes)"
         fd.length);
-  (if fd.which then
-   match Ephemeron.K1.get_data tbl.o0 with
-   | Some value -> value := result
-   | None -> assert false
-  else
-    match Ephemeron.K1.get_data tbl.o1 with
-    | Some value -> value := result
-    | None -> assert false);
+  let _, cell = Ephemeron.find device.storage fd.uid in
+  cell := result;
   Lwt.return_ok ()
 
-let move tbl ~src ~dst =
+let move device ~src ~dst =
   Log.debug (fun m -> m "Start to move a key to another.");
   if src == dst then Lwt.return_ok ()
   else
-    match Ephemeron.K1.get_data tbl.o0, Ephemeron.K1.get_data tbl.o1 with
-    | Some v0, Some v1 ->
-        let k0 = Option.get (Ephemeron.K1.get_key tbl.o0) in
-        let k1 = Option.get (Ephemeron.K1.get_key tbl.o1) in
-        if src == k0 && dst == k1 then v1 := !v0
-        else if src == k1 && dst == k0 then v0 := !v1
-        else (
-          Log.err (fun m -> m "Given keys are wrong!");
-          assert false);
-        Lwt.return_ok ()
-    | _ ->
-        Log.err (fun m -> m "One object was deleted by the garbage collector.");
-        assert false
+    let a, srcv = Ephemeron.find device.storage src in
+    let b, dstv = Ephemeron.find device.storage dst in
+    assert (a <> b);
+    let tmpv = !srcv in
+    srcv := !dstv;
+    dstv := tmpv;
+    Lwt.return_ok ()
 
-let project tbl uid =
-  if
-    Option.fold ~none:false
-      ~some:(fun k -> k == uid)
-      (Ephemeron.K1.get_key tbl.o0)
-  then !(Option.get (Ephemeron.K1.get_data tbl.o0))
-  else if
-    Option.fold ~none:false
-      ~some:(fun k -> k == uid)
-      (Ephemeron.K1.get_key tbl.o1)
-  then !(Option.get (Ephemeron.K1.get_data tbl.o1))
-  else Cstruct.empty
+let project device uid =
+  let _, cell = Ephemeron.find device.storage uid in
+  !cell

@@ -16,14 +16,18 @@ open Lwt.Infix
 
 let pp_error = Rresult.R.pp_msg
 
-let create ~mode:_ t path =
+let create ?(trunc = true) ~mode:_ t path =
   let path = Fpath.(t // path) in
-  Lwt_unix.openfile (Fpath.to_string path) Unix.[ O_CREAT; O_RDWR ] 0o644
-  >>= Lwt.return_ok
+  let flags =
+    match trunc with
+    | true -> Unix.[ O_CREAT; O_RDWR; O_TRUNC ]
+    | false -> Unix.[ O_CREAT; O_RDWR ]
+  in
+  Lwt_unix.openfile (Fpath.to_string path) flags 0o644 >>= Lwt.return_ok
 
 let map _ fd ~pos len =
   let res =
-    Mmap.V1.map_file
+    Unix.map_file
       (Lwt_unix.unix_file_descr fd)
       ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in

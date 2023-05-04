@@ -29,6 +29,7 @@ module type S = sig
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
+    ?threads:int ->
     ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
@@ -52,13 +53,12 @@ module type S = sig
 end
 
 (** Creates a lower-level [Sync] functions [fetch] and [push] that are then
-        overridden by backend-specific implementations such as [Mem] and [Git_unix] *)
+    overridden by backend-specific implementations such as [Mem] and [Git_unix] *)
 module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
     (Index : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
-    (Store : Minimal.S with type hash = Digestif.t)
-    (HTTP : Smart_git.HTTP) : sig
+    (Store : Minimal.S with type hash = Digestif.t) : sig
   type hash = Digestif.t
   type store = Store.t
   type error = [ `Exn of exn | `Store of Store.error | Mimic.error ]
@@ -68,6 +68,7 @@ module Make
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
+    ?threads:int ->
     ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->

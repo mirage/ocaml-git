@@ -81,6 +81,7 @@ let equal p0 p1 = String.equal p0 p1
 let compare p0 p1 = String.compare p0 p1
 let head = "HEAD"
 let master = "refs/heads/master"
+let main = "refs/heads/main"
 
 module Ordered = struct
   type nonrec t = t

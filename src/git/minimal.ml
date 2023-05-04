@@ -1,12 +1,10 @@
 module type S = sig
   type t
   type hash
+  type decode_error := [ `Msg of string ]
 
-  type error =
-    private
-    [> `Not_found of hash
-    | `Reference_not_found of Reference.t
-    | `Msg of string ]
+  type error = private
+    [> `Not_found of hash | `Reference_not_found of Reference.t | decode_error ]
 
   val pp_error : error Fmt.t
 
@@ -16,19 +14,19 @@ module type S = sig
 
   val dotgit : t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used - eg. the default
-      [?dotgit] value of {!create} if the client does not notice a specific
+      [?dotgit] value of [v] if the client does not notice a specific
       value. *)
 
   val root : t -> Fpath.t
   (** [root state] returns the current path of the repository. eg. the default
-      value [?root] value of {!create} if the client does not notice a specific
+      value [?root] value of [v] if the client does not notice a specific
       value. *)
 
   (*
   val compression : t -> int
   (** [compression state] returns the current level of the compression used to
       write a Git object - eg. the default value [?compression] value of
-      {!create} if the client does not notice a specific value. *)
+      [v] if the client does not notice a specific value. *)
   *)
 
   val contents : t -> (hash * Value.t) list Lwt.t
@@ -46,9 +44,14 @@ module type S = sig
   (** [read state hash] can retrieve a git object from the current repository
       [state]. It de-serializes the git object to an OCaml value. *)
 
+  val read_opt : t -> hash -> (Value.t option, decode_error) result Lwt.t
+  (** [read_opt state hash] is like {!read} but does not return (or log) an
+      error if the git object referenced by [hash] cannot be retrieved from
+      [state]. *)
+
   val read_exn : t -> hash -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an exception
-      (instead to return a {!result}) if the git object requested does not exist
+      (instead to return a [result]) if the git object requested does not exist
       or when we catch any others errors. *)
 
   val mem : t -> hash -> bool Lwt.t
@@ -82,7 +85,7 @@ module type S = sig
       git object [hash] which located in [path] (for example, if you iter on a
       commit, [path] should be ["."] - however, if you iter on a tree, [path]
       should be the directory path represented by your tree). For each git
-      objects, we notice the path [name] (derived from [path]) if the object is
+      object, we notice the path [name] (derived from [path]) if the object is
       a Blob or a Tree, the [length] or the git object (see {!size}), the [hash]
       and the [value].
 
@@ -90,16 +93,16 @@ module type S = sig
 
       - {!Value.Blob.t}: [f] is called only one time with the OCaml value of the
         {i blob}.
-      - {!Value.Tree.t}: [f] is called firstly with the Ocaml value of the
+      - {!Value.Tree.t}: [f] is called firstly with the OCaml value of the
         pointed {i tree} by the hash [hash]. Then, we {i iter} (and call [f] for
         each iteration) in the list of entries of the {i tree}. Finally, we
         retrieve recursively all sub-tree objects and do an ascending walk. [f]
         is never called more than one time for each hash.
       - {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
-        pointed {i commit} by the hash [hash]. Then, it follozs recursively all
-        parents of the current commit, Finallym it starts a [fold] inside the
+        pointed {i commit} by the hash [hash]. Then, it follows recursively all
+        parents of the current commit, Finally, it starts a [fold] inside the
         pointed root {i tree} git object of each {i commit} previously
-        retrieved. [f] never called more than one time for each hash.
+        retrieved. [f] is never called more than one time for each hash.
       - {!Value.Tag.t}: [f] is called firstly with the OCaml value of the
         pointed {i tag} by the hash [hash]. Then, it follows the git object
         pointed by the {i tag}.
@@ -122,8 +125,8 @@ module type S = sig
         [reference] (available in the git repository [state]). *)
 
     val resolve : t -> Reference.t -> (hash, error) result Lwt.t
-    (** [resolve state reference] returns obj-id pointed at by [reference] (available in
-        the git repository [state]). *)
+    (** [resolve state reference] returns obj-id pointed at by [reference]
+        (available in the git repository [state]). *)
 
     val write :
       t -> Reference.t -> Reference.contents -> (unit, error) result Lwt.t

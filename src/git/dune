@@ -1,8 +1,38 @@
 (library
  (name git)
  (public_name git)
- (libraries bigarray-compat git.nss.capability mimic rresult git.nss.sigs
-   git.nss.pck optint loose decompress.de decompress.zl result git.nss.smart
-   logs lwt cstruct angstrom bigstringaf carton ke fmt checkseum git.nss.git
-   git.nss.hkt ocamlgraph astring fpath loose_git carton-lwt carton-git
-   digestif encore))
+ (libraries
+  angstrom
+  astring
+  bigarray-compat
+  bigstringaf
+  carton
+  carton-git
+  carton-lwt
+  checkseum
+  cstruct
+  decompress.de
+  decompress.zl
+  digestif
+  encore
+  fmt
+  fpath
+  git.nss.capability
+  git.nss.git
+  git.nss.hkt
+  git.nss.pck
+  git.nss.sigs
+  git.nss.smart
+  hxd.core
+  hxd.string
+  ke
+  logs
+  loose
+  loose_git
+  lwt
+  mimic
+  ocamlgraph
+  optint
+  result
+  rresult
+))

@@ -1,30 +1,32 @@
-type 'stack endpoint = {
-  stack : 'stack;
-  ipaddr : Ipaddr.V4.t;
+type endpoint = {
   port : int;
+  hostname : string;
   authenticator : Awa.Keys.authenticator option;
   user : string;
-  key : Awa.Hostkey.priv;
+  credentials : [ `Password of string | `Pubkey of Awa.Hostkey.priv ];
   path : string;
   capabilities : [ `Rd | `Wr ];
 }
 
-module Make
-    (Stack : Mirage_stack.V4) (TCP : sig
-      val tcp_endpoint : (Stack.t * Ipaddr.V4.t * int) Mimic.value
-      val tcp_stack : Stack.t Mimic.value
-      val tcp_ipaddr : Ipaddr.V4.t Mimic.value
-    end)
-    (Mclock : Mirage_clock.MCLOCK) : sig
-  type nonrec endpoint = Stack.t endpoint
-  type flow
+val git_mirage_ssh_password : string Mimic.value
+val git_mirage_ssh_key : Awa.Hostkey.priv Mimic.value
+val git_mirage_ssh_authenticator : Awa.Keys.authenticator Mimic.value
 
-  val ssh_endpoint : endpoint Mimic.value
-  val ssh_protocol : (endpoint, flow) Mimic.protocol
-  val ssh_authenticator : Awa.Keys.authenticator Mimic.value
-  val ssh_key : Awa.Hostkey.priv Mimic.value
-  val with_authenticator : string -> Mimic.ctx -> Mimic.ctx
-  val with_rsa_key : string -> Mimic.ctx -> Mimic.ctx
-  val with_ed25519_key : string -> Mimic.ctx -> Mimic.ctx
+module type S = sig
+  val connect : Mimic.ctx -> Mimic.ctx Lwt.t
+
+  val with_optionnal_key :
+    ?authenticator:string ->
+    key:string option ->
+    password:string option ->
+    Mimic.ctx ->
+    Mimic.ctx Lwt.t
+
   val ctx : Mimic.ctx
 end
+
+module Make
+    (Mclock : Mirage_clock.MCLOCK)
+    (TCP : Tcpip.Tcp.S)
+    (Time : Mirage_time.S)
+    (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S

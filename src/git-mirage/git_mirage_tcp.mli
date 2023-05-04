@@ -1,11 +1,8 @@
-module Make (Stack : Mirage_stack.V4) : sig
-  val tcp_endpoint : (Stack.t * Ipaddr.V4.t * int) Mimic.value
-
-  val tcp_protocol :
-    (Stack.t * Ipaddr.V4.t * int, Stack.TCPV4.flow) Mimic.protocol
-
-  val tcp_ipaddr : Ipaddr.V4.t Mimic.value
-  val tcp_stack : Stack.t Mimic.value
-  val with_stack : Stack.t -> Mimic.ctx -> Mimic.ctx
+module type S = sig
+  val connect : Mimic.ctx -> Mimic.ctx Lwt.t
   val ctx : Mimic.ctx
 end
+
+module Make
+    (TCP : Tcpip.Tcp.S)
+    (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S

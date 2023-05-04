@@ -14,7 +14,10 @@ module type APPEND = sig
   type +'a fiber
 
   val pp_error : error Fmt.t
-  val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
+  val create :
+    ?trunc:bool -> mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
   val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t
   val append : t -> 'm wr fd -> string -> unit fiber
   val move : t -> src:uid -> dst:uid -> (unit, error) result fiber
@@ -58,10 +61,11 @@ module type SMART_GIT = sig
         [ `SSH of string
         | `Git
         | `HTTP of (string * string) list
-        | `HTTPS of (string * string) list ];
+        | `HTTPS of (string * string) list
+        | `Scheme of string ];
       port : int option;
       path : string;
-      host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
+      hostname : string;
     }
 
     val pp : t Fmt.t
@@ -76,9 +80,9 @@ module type SMART_GIT = sig
 
   (** {3 Mimic values.}
 
-      When the user use an [Endpoint.t] to {!fetch} or {!push}, we fill the given Mimic's [ctx]
+      When the user use an [Endpoint.t] to {!Make.fetch} or {!Make.push}, we fill the given Mimic's [ctx]
       with some available informations such as:
-      - if we want to {!fetch} ([`Rd]) or {!push} ([`Wr])
+      - if we want to {!Make.fetch} ([`Rd]) or {!Make.push} ([`Wr])
       - the scheme/protocol that the user would like to use ([git://], SSH or HTTP - with or without TLS)
       - the path of the git repository
       - the host (an IP adress or a domain name)
@@ -97,26 +101,35 @@ module type SMART_GIT = sig
       re-use these values to be able to start a [mirage-tcpip] connection, a [awa-ssh] connection
       of a [cohttp] (with or without [ocaml-tls]) connection. *)
 
+  type handshake = uri0:Uri.t -> uri1:Uri.t -> Mimic.flow -> unit Lwt.t
+
   val git_capabilities : [ `Rd | `Wr ] Mimic.value
-  val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
+
+  val git_scheme :
+    [ `Git | `SSH | `HTTP | `HTTPS | `Scheme of string ] Mimic.value
+
   val git_path : string Mimic.value
-
-  val git_host :
-    [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] Mimic.value
-
+  val git_hostname : string Mimic.value
   val git_ssh_user : string Mimic.value
   val git_port : int Mimic.value
+  val git_http_headers : (string * string) list Mimic.value
+
+  val git_transmission :
+    [ `Git | `Exec | `HTTP of Uri.t * handshake ] Mimic.value
+
+  val git_uri : Uri.t Mimic.value
 
   module Make
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
       (Pack : APPEND with type +'a fiber = 'a Lwt.t)
       (Index : APPEND with type +'a fiber = 'a Lwt.t)
-      (HTTP : HTTP)
       (Uid : UID)
       (Ref : Sigs.REF) : sig
     val fetch :
       ?push_stdout:(string -> unit) ->
       ?push_stderr:(string -> unit) ->
+      ?bounds:int ->
+      ?threads:int ->
       ctx:Mimic.ctx ->
       (Uid.t, _, Uid.t * int ref * int64, 'g, Scheduler.t) Sigs.access
       * Uid.t Carton_lwt.Thin.light_load

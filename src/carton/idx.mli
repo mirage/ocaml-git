@@ -53,12 +53,12 @@ end
     stream. *)
 
 module Device : sig
-  type 'uid t
+  type t
   type uid
 
-  val device : unit -> _ t
-  val create : 'uid t -> uid
-  val project : 'uid t -> uid -> Bigstringaf.t
+  val device : unit -> t
+  val create : t -> uid
+  val project : t -> uid -> Bigstringaf.t
 end
 
 module M (IO : sig
@@ -72,7 +72,7 @@ end) (Uid : sig
   val of_raw_string : string -> t
   val null : t
 end) : sig
-  type t = Uid.t Device.t
+  type t = Device.t
   type uid = Device.uid
   type fd
   type error

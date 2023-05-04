@@ -1,20 +1,59 @@
 (library
- (name git_mirage_tcp)
- (modules git_mirage_tcp)
- (public_name git-mirage.tcp)
- (libraries git.nss.git mimic result fmt lwt mirage-flow ipaddr
-   mirage-protocols mirage-stack))
-
-(library
  (name git_mirage_ssh)
  (modules git_mirage_ssh)
  (public_name git-mirage.ssh)
- (libraries git.nss.git mimic result rresult lwt fmt ipaddr mirage-protocols
-   mirage-stack mirage-flow mirage-clock awa awa-mirage))
+ (libraries
+  mimic-happy-eyeballs
+  git.nss.git
+  mimic
+  lwt
+  fmt
+  result
+  tcpip
+  mirage-flow
+  mirage-time
+  mirage-clock
+  awa
+  awa-mirage))
 
 (library
- (name git_mirage_dns)
- (modules git_mirage_dns)
- (public_name git-mirage.dns)
- (libraries mimic git.nss.git domain-name lwt ipaddr mirage-random
-   mirage-time mirage-clock mirage-protocols mirage-stack dns-client.mirage))
+ (name git_mirage_tcp)
+ (modules git_mirage_tcp)
+ (public_name git-mirage.tcp)
+ (libraries
+  mimic-happy-eyeballs
+  git.nss.git
+  mimic
+  lwt
+  fmt
+  result
+  tcpip
+  mirage-flow))
+
+(library
+ (name git_mirage_http)
+ (modules git_mirage_http)
+ (public_name git-mirage.http)
+ (libraries
+  base64
+  mimic-happy-eyeballs
+  git-paf
+  git.nss.git
+  mimic
+  lwt
+  fmt
+  tls
+  uri
+  hex
+  x509
+  mirage-crypto
+  tls-mirage
+  ptime
+  cstruct
+  result
+  ca-certs-nss
+  domain-name
+  tcpip
+  mirage-flow
+  mirage-time
+  mirage-clock))

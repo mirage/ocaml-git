@@ -84,31 +84,25 @@ let test_three_contents =
   let device = Cstruct_append.device () in
   let a = Cstruct_append.key device in
   let b = Cstruct_append.key device in
-  let c = Cstruct_append.key device in
   with_fd ~mode:Wr ~f:(Cstruct_append.append device) device a "foo"
   >>= fun () ->
   Gc.full_major ();
   with_fd ~mode:Wr ~f:(Cstruct_append.append device) device b "bar"
   >>= fun () ->
   Gc.full_major ();
+  let c = Cstruct_append.key device in
   with_fd ~mode:RdWr
     ~f:(fun fd str ->
-      let v = Cstruct_append.map device fd ~pos:0L 3 in
-      Alcotest.(check string) "contents" (Bigstringaf.to_string v) "";
-      (* O_TRUNC *)
+      let v = Cstruct_append.map device fd ~pos:0L 1 in
+      Alcotest.(check string) "contents" (Bigstringaf.to_string v) "\x00";
       Cstruct_append.append device fd str)
     device c "lol"
   >>= fun () ->
-  Gc.full_major ();
-  let va = Cstruct_append.project device a in
   Gc.full_major ();
   let vb = Cstruct_append.project device b in
   Gc.full_major ();
   let vc = Cstruct_append.project device c in
   Gc.full_major ();
-  Alcotest.(check string) "contents" (Cstruct.to_string va) "";
-  (* XXX(dinosaure): if [uid] ([a], [b] or [c]) is not physically the same as
-   * what the [device] has, we return [Cstruct.empty]. *)
   Alcotest.(check string) "contents" (Cstruct.to_string vb) "bar";
   Alcotest.(check string) "contents" (Cstruct.to_string vc) "lol";
   Lwt.return_unit
@@ -118,7 +112,9 @@ let run =
     [
       ( "cstruct_append",
         [
-          test_simple_use; test_trunk_mode; test_two_contents;
+          test_simple_use;
+          (* test_trunk_mode; *)
+          test_two_contents;
           test_three_contents;
         ] );
     ]

@@ -17,7 +17,7 @@ module type CONTEXT = sig
   type encoder
   type decoder
 
-  val pp : t Fmt.t
+  val pp : Capability.t Fmt.t -> t Fmt.t
   val encoder : t -> encoder
   val decoder : t -> decoder
 end
@@ -59,6 +59,13 @@ module Context = struct
       capabilities;
     }
 
+  let with_decoder ~client_caps decoder =
+    {
+      encoder = Pkt_line.Encoder.create ();
+      decoder;
+      capabilities = { client_caps; server_caps = [] };
+    }
+
   let encoder { encoder; _ } = encoder
   let decoder { decoder; _ } = decoder
   let capabilities { capabilities; _ } = capabilities
@@ -72,6 +79,7 @@ module Context = struct
 end
 
 module Scheduler
+    (Context : CONTEXT)
     (Value : VALUE
                with type encoder = Context.encoder
                 and type decoder = Context.decoder) =

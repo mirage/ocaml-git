@@ -1,7 +1,23 @@
 (executable
  (name test)
- (libraries cmdliner logs.fmt logs lwt lwt.unix digestif.c astring fmt fpath
-   bos rresult result git git-unix git-unix.index alcotest))
+ (libraries
+  cmdliner
+  logs.fmt
+  logs
+  lwt
+  lwt.unix
+  digestif.c
+  astring
+  fmt
+  fmt.tty
+  fpath
+  bos
+  rresult
+  result
+  git
+  git-unix
+  git-unix.index
+  alcotest))
 
 (rule
  (alias runtest)

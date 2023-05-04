@@ -27,7 +27,7 @@ module Make
       (Uid.t, Uid.t * int ref * int64, 'g) store ->
       (Uid.t, _, Uid.t * int ref * int64, 'g, Scheduler.t) access ->
       V1.configuration ->
-      (string * int * int -> unit) ->
+      (string * int * int -> unit IO.t) ->
       (Ref.t * Uid.t) list IO.t
   end
 

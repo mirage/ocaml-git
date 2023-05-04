@@ -157,7 +157,6 @@ module Minor_heap (Digestif : Digestif.S) = struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = Fpath.t (* [.git/objects] *)
-
   type uid = Digestif.t
   type error = [ `Not_found of Digestif.t | `Msg of string ]
 
@@ -214,8 +213,7 @@ module Minor_heap (Digestif : Digestif.S) = struct
         in
         let fd = Unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o400 in
         let rs =
-          Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false
-            [| len |]
+          Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
         in
         Unix.close fd;
         Lwt.return (Bigarray.array1_of_genarray rs)
@@ -327,7 +325,6 @@ module Major_heap = struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = Fpath.t (* [.git/objects/pack] *)
-
   type uid = Fpath.t
   type 'a rd = < rd : unit ; .. > as 'a
   type 'a wr = < wr : unit ; .. > as 'a
@@ -353,8 +350,10 @@ module Major_heap = struct
 
      A [mode] is better (to avoid duplicate) and safe. *)
 
-  let create : type a. mode:a mode -> t -> uid -> (a fd, error) result Lwt.t =
-   fun ~mode root path ->
+  let create :
+      type a.
+      ?trunc:bool -> mode:a mode -> t -> uid -> (a fd, error) result Lwt.t =
+   fun ?(trunc = true) ~mode root path ->
     let path = Fpath.(root // path) in
     let flags, perm =
       match mode with
@@ -362,12 +361,15 @@ module Major_heap = struct
       | Wr -> Unix.[ O_WRONLY; O_CREAT; O_APPEND ], 0o600
       | RdWr -> Unix.[ O_RDWR; O_CREAT; O_APPEND ], 0o600
     in
+    let flags = if trunc then Unix.O_TRUNC :: flags else flags in
     let rec process () =
       Lwt_unix.openfile (Fpath.to_string path) flags perm >>= fun fd ->
       Lwt.return_ok fd
     and error = function
       | Unix.Unix_error (Unix.ENOENT, _, _) | Unix.Unix_error (Unix.EACCES, _, _)
         ->
+          Printexc.print_backtrace stdout;
+          flush stdout;
           Log.err (fun m -> m "%a does not exists." Fpath.pp path);
           Lwt.return_error (`Not_found path)
       | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
@@ -379,7 +381,7 @@ module Major_heap = struct
    fun _ fd ~pos len ->
     let fd = Lwt_unix.unix_file_descr fd in
     let payload =
-      Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+      Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
     in
     Bigarray.array1_of_genarray payload
 
@@ -418,11 +420,15 @@ module Major_heap = struct
     let rec f path =
       Lwt.catch
         (fun () ->
-          Lwt_unix.unlink (Fpath.to_string path) >>= fun () ->
-          Lwt_unix.unlink (Fpath.to_string (Fpath.set_ext "idx" path)))
+          Lwt_unix.unlink Fpath.(to_string (root // path)) >>= fun () ->
+          Lwt_unix.unlink Fpath.(to_string (root // set_ext "idx" path)))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> f path
-          | _exn -> Lwt.return_unit)
+          | exn ->
+              Log.warn (fun m ->
+                  m "Got an error while deleting %a: %s" Fpath.pp path
+                    (Printexc.to_string exn));
+              Lwt.return_unit)
     in
     Lwt_list.iter_p f lst >>= Lwt.return_ok
 
@@ -504,7 +510,6 @@ module Reference_heap = struct
   (* XXX(dinosaure): ensure the atomicity. *)
 
   type t = Fpath.t (* [.git] *)
-
   type error = [ `Not_found of Git.Reference.t | `Msg of string ]
 
   let pp_error ppf = function
@@ -529,7 +534,7 @@ module Reference_heap = struct
     Bos.OS.Dir.create ~path:true base >>= fun _ ->
     Bos.OS.Dir.exists path >>= fun res ->
     (if res then Bos.OS.Dir.delete ~must_exist:false ~recurse:true path
-    else R.ok ())
+     else R.ok ())
     >>= fun () ->
     Bos.OS.File.tmp "git-reference-%s" >>= fun src ->
     Bos.OS.File.write src str >>= fun () ->
@@ -625,6 +630,15 @@ module Make (Digestif : Digestif.S) = struct
           | _ -> Fmt.invalid_arg "Invalid major uniq ID: %a" Fpath.pp path);
     }
 
+  let update_head refs =
+    match Reference_heap.atomic_rd refs Git.Reference.head with
+    | Error (`Not_found _) ->
+        Reference_heap.atomic_wr refs Git.Reference.head
+          (Fmt.str "ref: %a\n" Git.Reference.pp Git.Reference.master)
+        |> Lwt.return
+    | Ok _ -> Lwt.return_ok ()
+    | Error (`Msg _ as err) -> Lwt.return_error err
+
   let v ?dotgit root =
     let dotgit =
       match dotgit with Some v -> v | None -> Fpath.(root / ".git")
@@ -635,12 +649,11 @@ module Make (Digestif : Digestif.S) = struct
     let temp = Fpath.(dotgit / "tmp") in
     let refs = dotgit in
     Bos.OS.Dir.set_default_tmp temp;
-    Unix.mkdir ~path:true temp >>? fun _ ->
     Unix.mkdir ~path:true refs >>? fun _ ->
-    Reference_heap.atomic_wr refs Git.Reference.head
-      (Fmt.str "ref: %a\n" Git.Reference.pp Git.Reference.master)
-    |> Lwt.return
-    >>? fun _ ->
+    Unix.mkdir ~path:true temp >>? fun _ ->
+    Unix.mkdir ~path:true Fpath.(refs / "refs" / "heads") >>? fun _ ->
+    Unix.mkdir ~path:true Fpath.(refs / "refs" / "tags") >>? fun _ ->
+    update_head refs >>? fun _ ->
     Unix.mkdir ~path:true minor >>? fun _ ->
     Unix.mkdir ~path:true major >>? fun _ ->
     let open Lwt.Infix in
@@ -651,13 +664,13 @@ end
 
 module Store = Make (Digestif.SHA1)
 
-module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
+let ctx = Git_unix_mimic.ctx
+
+module Sync (Git_store : Git.S) = struct
   let src = Logs.Src.create "git-unix.sync" ~doc:"logs git-unix's sync event"
 
   module Log = (val Logs.src_log src : Logs.LOG)
-
-  include
-    Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Git_store) (HTTP)
+  include Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Git_store)
 
   let random_gen = lazy (Random.State.make_self_init ())
 
@@ -718,16 +731,19 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
     Lwt.async fill;
     fun () -> Lwt_stream.get stream
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx edn store
-      ?version ?capabilities ?deepen want =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx edn
+      store ?version ?capabilities ?deepen want =
     let dotgit = Git_store.dotgit store in
     let temp = Fpath.(dotgit / "tmp") in
     tmp temp "pack-%s.pack" >>= fun src ->
     tmp temp "pack-%s.pack" >>= fun dst ->
     tmp temp "pack-%s.idx" >>= fun idx ->
-    let create_idx_stream () = stream_of_file idx in
-    let create_pack_stream () = stream_of_file dst in
-    fetch ~push_stdout ~push_stderr ~ctx edn store ?version ?capabilities
-      ?deepen want ~src ~dst ~idx ~create_idx_stream ~create_pack_stream temp
-      temp
+    let create_idx_stream () = stream_of_file Fpath.(temp // idx) in
+    let create_pack_stream () = stream_of_file Fpath.(temp // dst) in
+    fetch ~push_stdout ~push_stderr ?threads ~ctx edn store ?version
+      ?capabilities ?deepen want ~src ~dst ~idx ~create_idx_stream
+      ~create_pack_stream temp temp
+
+  let push ~ctx edn store ?version ?capabilities cmds =
+    push ~ctx edn store ?version ?capabilities cmds
 end

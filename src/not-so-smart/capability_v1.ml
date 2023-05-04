@@ -87,7 +87,12 @@ let of_string ?value = function
   | capability -> (
       match value with
       | Some value -> `Parameter (capability, value)
-      | None -> `Other capability)
+      | None -> (
+          match Astring.String.cut ~sep:"=" capability with
+          | Some ("push-cert", v) -> `Push_cert v
+          | Some ("agent", v) -> `Agent v
+          | Some (k, v) -> `Parameter (k, v)
+          | None -> `Other capability))
 
 let pp ppf = function
   | `Multi_ack -> Fmt.pf ppf "Multi-ACK"

@@ -1,7 +1,9 @@
 open Sigs
 
-module Log = (val let src = Logs.Src.create "state-flow" in
-                  Logs.src_log src : Logs.LOG)
+module Log =
+  (val let src = Logs.Src.create "state-flow" in
+    Logs.src_log src
+    : Logs.LOG)
 
 let io_buffer_size = 65536
 
@@ -34,7 +36,7 @@ let run :
         Log.err (fun m -> m "Got a protocol error: %a." pp_error err);
         failwithf "%a" pp_error err
     | Read { k; buffer; off; len; eof } -> (
-        let rd_n_bytes = min (Cstruct.len cbuff) len in
+        let rd_n_bytes = min (Cstruct.length cbuff) len in
         Log.debug (fun m -> m "Start to read %d byte(s)." rd_n_bytes);
         flow_ops.recv flow (Cstruct.sub cbuff 0 rd_n_bytes) >>= function
         | Ok `End_of_flow ->

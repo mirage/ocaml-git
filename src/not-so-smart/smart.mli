@@ -54,20 +54,8 @@ module Proto_request : sig
   type t
 
   val pp : t Fmt.t
-
-  val upload_pack :
-    host:[ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] ->
-    ?port:int ->
-    ?version:int ->
-    string ->
-    t
-
-  val receive_pack :
-    host:[ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] ->
-    ?port:int ->
-    ?version:int ->
-    string ->
-    t
+  val upload_pack : host:string -> ?port:int -> ?version:int -> string -> t
+  val receive_pack : host:string -> ?port:int -> ?version:int -> string -> t
 end
 
 module Want : sig
@@ -115,6 +103,7 @@ module Commands : sig
   val create : 'uid -> 'ref -> ('uid, 'ref) command
   val delete : 'uid -> 'ref -> ('uid, 'ref) command
   val update : 'uid -> 'uid -> 'ref -> ('uid, 'ref) command
+  val capabilities : ('uid, 'ref) t -> Capability.t list
 
   val v :
     capabilities:Capability.t list ->
@@ -123,6 +112,7 @@ module Commands : sig
     ('uid, 'ref) t
 
   val commands : ('uid, 'ref) t -> ('uid, 'ref) command list
+  val pp : 'uid Fmt.t -> 'ref Fmt.t -> ('uid, 'ref) t Fmt.t
 
   val map :
     fuid:('uid0 -> 'uid1) ->
@@ -134,7 +124,7 @@ end
 module Status : sig
   type 'ref t = private {
     result : (unit, string) result;
-    commands : ('ref, 'ref * string) result list;
+    commands : [ `FF of 'ref | `OK of 'ref | `ER of 'ref * string ] list;
   }
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
@@ -185,24 +175,30 @@ type error =
   | `Invalid_ack of string
   | `Invalid_result of string
   | `Invalid_command_result of string
+  | `Invalid_command of string
   | `No_enough_space
+  | `Unexpected_pkt_line of string
   | `Unexpected_flush
-  | `Invalid_pkt_line ]
+  | `Invalid_pkt_line of string ]
 
 val pp_error : error Fmt.t
 
 module Context : sig
   type t
 
-  type capabilities = {
+  type capabilities = State.Context.capabilities = {
     client_caps : Capability.t list;
     server_caps : Capability.t list;
   }
 
   val make : client_caps:Capability.t list -> t
-  val capabilities : t -> capabilities
+
+  val with_decoder :
+    client_caps:Capability.t list -> Pkt_line.Decoder.decoder -> t
+
   val replace_server_caps : t -> Capability.t list -> unit
   val is_cap_shared : t -> Capability.t -> bool
+  val capabilities : t -> capabilities
 end
 
 type 'a send
@@ -223,12 +219,15 @@ val recv_pack :
   ?side_band:bool ->
   ?push_stdout:(string -> unit) ->
   ?push_stderr:(string -> unit) ->
-  (string * int * int -> unit) ->
-  bool recv
+  bool ->
+  [ `Payload of string * int * int | `End_of_transmission | `Stdout | `Stderr ]
+  recv
 
+val recv_flush : unit recv
+val recv_commands : (string, string) Commands.t option recv
 val ack : string Negotiation.t recv
 val shallows : string Shallow.t list recv
-val status : string Status.t recv
+val status : bool -> string Status.t recv
 val packet : trim:bool -> string recv
 val send_advertised_refs : (string, string) Advertised_refs.t send
 val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t

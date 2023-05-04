@@ -31,8 +31,10 @@ module Make
 struct
   open Scheduler
 
-  module Log = (val let src = Logs.Src.create "fetch" in
-                    Logs.src_log src : Logs.LOG)
+  module Log =
+    (val let src = Logs.Src.create "fetch" in
+         Logs.src_log src
+        : Logs.LOG)
 
   let ( >>= ) x f = IO.bind x f
   let return x = IO.return x
@@ -56,13 +58,15 @@ struct
         pp_error = Flow.pp_error;
       }
 
+  let is_a_tag ref = List.exists (String.equal "tags") (Ref.segs ref)
+
   let references want have =
     match want with
     | `None -> [], []
     | `All ->
         List.fold_left
           (fun acc -> function
-            | uid, ref, false -> (uid, ref) :: acc
+            | uid, ref, false when not (is_a_tag ref) -> (uid, ref) :: acc
             | _ -> acc)
           [] have
         |> List.split
@@ -132,8 +136,11 @@ struct
             State_flow.run sched io_raise Smart.pp_error io flow
               (recv_pack_state ctx)
             |> prj
-            >>= fun should_continue ->
-            if should_continue then read_pack () else return ()
+            >>= function
+            | `End_of_transmission -> return ()
+            | `Payload (str, off, len) -> pack (str, off, len) >>= read_pack
+            | `Stdout -> read_pack ()
+            | `Stderr -> read_pack ()
           in
           Log.debug (fun m -> m "Start to download PACK file.");
           read_pack () >>= fun () -> return (List.combine refs uids)

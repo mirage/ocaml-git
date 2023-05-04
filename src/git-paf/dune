@@ -1,0 +1,24 @@
+(library
+ (name git_paf)
+ (public_name git-paf)
+ (libraries
+  logs
+  uri
+  mirage-time
+  mirage-clock
+  tcpip
+  mirage-flow
+  domain-name
+  bigstringaf
+  result
+  lwt
+  fmt
+  git.nss.git
+  rresult
+  tls
+  ca-certs-nss
+  ipaddr
+  mimic
+  paf
+  tls-mirage
+  httpaf))

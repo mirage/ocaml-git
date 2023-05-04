@@ -36,7 +36,7 @@ module type S = sig
     committer:User.t ->
     ?parents:hash list ->
     ?extra:(string * string list) list ->
-    string ->
+    string option ->
     t
   (** [make ~author ~committer ?parents ~tree msg] makes an OCaml value {!t}.
       [?parents] should be a non-empty list and corresponds to a list of hashes
@@ -68,7 +68,7 @@ module type S = sig
   val author : t -> User.t
   (** [author c] returns the author of the given commit object. *)
 
-  val message : t -> string
+  val message : t -> string option
   (** [message c] returns the message of the given commit object. *)
 
   val extra : t -> (string * string list) list

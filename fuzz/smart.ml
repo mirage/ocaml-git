@@ -20,12 +20,24 @@ let capability =
   Crowbar.choose
     Crowbar.
       [
-        const `Multi_ack; const `Multi_ack_detailed; const `No_done;
-        const `Thin_pack; const `Side_band; const `Side_band_64k;
-        const `Ofs_delta; const `Shallow; const `Deepen_since;
-        const `Deepen_not; const `No_progress; const `Include_tag;
-        const `Report_status; const `Delete_refs; const `Quiet; const `Atomic;
-        const `Push_options; const `Allow_tip_sha1_in_want;
+        const `Multi_ack;
+        const `Multi_ack_detailed;
+        const `No_done;
+        const `Thin_pack;
+        const `Side_band;
+        const `Side_band_64k;
+        const `Ofs_delta;
+        const `Shallow;
+        const `Deepen_since;
+        const `Deepen_not;
+        const `No_progress;
+        const `Include_tag;
+        const `Report_status;
+        const `Delete_refs;
+        const `Quiet;
+        const `Atomic;
+        const `Push_options;
+        const `Allow_tip_sha1_in_want;
         const `Allow_reachable_sha1_in_want;
       ]
 

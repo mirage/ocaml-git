@@ -1,7 +1,9 @@
 open Sigs
 
-module Log = (val let src = Logs.Src.create "find-common" in
-                  Logs.src_log src : Logs.LOG)
+module Log =
+  (val let src = Logs.Src.create "find-common" in
+       Logs.src_log src
+      : Logs.LOG)
 
 type configuration = {
   stateless : bool;
@@ -53,7 +55,8 @@ let io_monad (type t) { bind; return } =
         | [] -> return a
         | x :: r -> bind (f a x) (fun a' -> go a' r)
       in
-      go init l end : Io_monad
+      go init l
+  end : Io_monad
     with type s = t)
 
 (* XXX(dinosaure): this part is really **ugly**! But we must follow the same

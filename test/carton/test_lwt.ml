@@ -3,20 +3,23 @@ open Lwt.Infix
 let map _ fd ~pos len =
   let fd = Lwt_unix.unix_file_descr fd in
   let payload =
-    Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+    Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
   Bigarray.array1_of_genarray payload
 
 let yield_map root fd ~pos len = map root fd ~pos len
 
-let create root path =
+let create ?(trunc = true) root path =
   let path = Fpath.(root // path) in
+  let flags =
+    match trunc with
+    | false -> Unix.[ O_RDWR; O_APPEND; O_CREAT ]
+    | true -> Unix.[ O_RDWR; O_APPEND; O_CREAT; O_TRUNC ]
+  in
 
   let rec process () =
-    Lwt_unix.openfile (Fpath.to_string path)
-      Unix.[ O_RDWR; O_APPEND; O_CREAT ]
-      0o644
-    >>= fun fd -> Lwt.return_ok fd
+    Lwt_unix.openfile (Fpath.to_string path) flags 0o644 >>= fun fd ->
+    Lwt.return_ok fd
   and error = function
     | Unix.Unix_error (Unix.ENOENT, _, _) | Unix.Unix_error (Unix.EACCES, _, _)
       ->

@@ -40,14 +40,12 @@ open Sigs
     the call by a simple internal table of {i weak pointers}. *)
 module W : sig
   type 'fd t
-
   and slice = { offset : int64; length : int; payload : Bigstringaf.t }
-
   and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
-  val length : int64
   val reset : 'fd t -> unit
-  val make : 'fd -> 'fd t
+  val make : ?sector:int64 -> 'fd -> 'fd t
+  val sector : 'fd t -> int64
   val load : map:'fd map -> 'fd t -> int64 -> slice option
 end
 
@@ -125,6 +123,7 @@ module Fp (Uid : UID) : sig
   val number : decoder -> int
   val version : decoder -> int
   val count : decoder -> int
+  val ctx : decoder -> Uid.ctx
   val src_rem : decoder -> int
   val src : decoder -> Bigstringaf.t -> int -> int -> decoder
 end
@@ -200,8 +199,12 @@ val len : v -> int
 val depth : v -> int
 (** [depth v] is the depth of the object into the PACK file it came from. *)
 
+val copy : ?flip:bool -> ?weight:weight -> v -> v
+(** [copy v] creates a fresh new object which is equal to the given [v]. *)
+
 val make :
   'fd ->
+  ?sector:int64 ->
   z:Zl.bigstring ->
   allocate:(int -> Zl.window) ->
   uid_ln:int ->
@@ -364,6 +367,12 @@ val of_offset_with_path :
     at [cursor] into [t]. This function is {i tail-recursive} and bound to the
     given [path]. *)
 
+val of_offset_with_source :
+  map:'fd W.map -> ('fd, 'uid) t -> v -> cursor:int64 -> v
+(** [of_offset_with_source ~map t ~path source ~cursor] is the object available
+    at [cursor] into [t]. This function is {i tail-recursive} and use the given
+    [source] if the requested object is a patch. *)
+
 (** {3 Uid of object.}
 
     Unique identifier of objects is a user-defined type which is not described
@@ -438,6 +447,7 @@ module Verify
 
   val pp : Format.formatter -> status -> unit
   val is_resolved : status -> bool
+  val is_base : status -> bool
   val uid_of_status : status -> Uid.t
   val kind_of_status : status -> kind
   val depth_of_status : status -> int
@@ -450,6 +460,7 @@ module Verify
     threads:int ->
     map:'fd W.map ->
     oracle:Uid.t oracle ->
+    verbose:(unit -> unit) ->
     ('fd, Uid.t) t ->
     matrix:status array ->
     unit IO.t

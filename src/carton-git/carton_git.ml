@@ -14,16 +14,24 @@ module type STORE = sig
   type +'a fiber
 
   val pp_error : error Fmt.t
-  val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
+  val create :
+    ?trunc:bool -> mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
   val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t
   val close : t -> 'm fd -> (unit, error) result fiber
   val list : t -> uid list fiber
   val length : 'm fd -> int64 fiber
 end
 
+let src = Logs.Src.create "carton-git" ~doc:"logs git's carton event"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 module type IO = sig
   type +'a t
 
+  val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
   val bind : 'a t -> ('a -> 'b t) -> 'b t
   val return : 'a -> 'a t
 end
@@ -56,7 +64,7 @@ struct
   let ( >>| ) x f = x >>= fun x -> return (f x)
 
   let idx (root : Store.t) acc path =
-    Store.create ~mode:Store.Rd root path >>? fun fd ->
+    Store.create ~trunc:false ~mode:Store.Rd root path >>? fun fd ->
     Store.length fd >>= fun length ->
     let payload = Store.map root fd ~pos:0L (Int64.to_int length) in
     Store.close root fd >>? fun () ->
@@ -67,7 +75,7 @@ struct
     return (Ok (idx :: acc))
 
   let pack (root : Store.t) acc (index, pack) =
-    Store.create ~mode:Store.Rd root pack >>? fun fd ->
+    Store.create ~trunc:false ~mode:Store.Rd root pack >>? fun fd ->
     Store.length fd >>= fun length ->
     let z = Bigstringaf.create De.io_buffer_size in
     let w = De.make_window ~bits:15 in
@@ -122,25 +130,31 @@ struct
       (Store.uid, < rd : unit > Store.fd, Uid.t) t ->
       idx:Store.uid ->
       Store.uid ->
-      (unit, Store.error) result IO.t =
+      (< rd : unit > Store.fd * int64, Store.error) result IO.t =
    fun root p ~idx:idx_uid pck ->
     idx root [] idx_uid >>? fun idxs ->
     let[@warning "-8"] [ idx ] = idxs in
     pack root [] (idx, pck) >>? fun vs ->
     List.iter (fun (k, v) -> Hashtbl.add p.tbl k v) (List.combine [ pck ] vs);
-    return (Ok ())
+    let[@warning "-8"] [ v ] = vs in
+    return (Ok (Carton.Dec.fd v.pack))
 
   let with_resources root pack uid buffers =
-    let map fd ~pos len = map root fd ~pos len in
-    let pack = Carton.Dec.with_z buffers.z pack in
-    let pack = Carton.Dec.with_allocate ~allocate:buffers.allocate pack in
-    let pack = Carton.Dec.with_w buffers.w pack in
-    let weight =
-      Carton.Dec.weight_of_uid ~map pack ~weight:Carton.Dec.null uid
-    in
-    let raw = Carton.Dec.make_raw ~weight in
-    let v = Carton.Dec.of_uid ~map pack raw uid in
-    return v
+    IO.catch
+      (fun () ->
+        let map fd ~pos len = map root fd ~pos len in
+        let pack = Carton.Dec.with_z buffers.z pack in
+        let pack = Carton.Dec.with_allocate ~allocate:buffers.allocate pack in
+        let pack = Carton.Dec.with_w buffers.w pack in
+        let weight =
+          Carton.Dec.weight_of_uid ~map pack ~weight:Carton.Dec.null uid
+        in
+        let raw = Carton.Dec.make_raw ~weight in
+        let v = Carton.Dec.of_uid ~map pack raw uid in
+        return v)
+      (fun exn ->
+        Printexc.print_backtrace stderr;
+        raise exn)
 
   let get :
       Store.t ->
@@ -151,14 +165,18 @@ struct
    fun root ~resources p uid ->
     let res = ref None in
     Hashtbl.iter
-      (fun k { index; _ } ->
-        if Carton.Dec.Idx.exists index uid then res := Some k)
+      (fun _ ({ index; _ } as x) ->
+        let v = Carton.Dec.Idx.exists index uid in
+        Log.debug (fun m -> m "%a exists into the *.idx file? %b" Uid.pp uid v);
+        if v then res := Some x)
       p.tbl;
     match !res with
-    | Some k ->
-        let { pack; _ } = Hashtbl.find p.tbl k in
+    | Some { pack; _ } ->
+        Log.debug (fun m -> m "Start to load the object from the PACK file.");
         resources (Carton.Dec.fd pack) (with_resources root pack uid)
-        >>= fun v -> return (Ok v)
+        >>= fun v ->
+        Log.debug (fun m -> m "Object %a loaded." Uid.pp uid);
+        return (Ok v)
     | None -> return (Error (`Not_found uid))
 
   let list : Store.t -> (Store.uid, 'm Store.fd, Uid.t) t -> Uid.t list =

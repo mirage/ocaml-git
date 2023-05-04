@@ -423,7 +423,8 @@ module Entry = struct
         let len = Varint.encode prefix_size ~off:0 to_remove in
         let prefix_size = Bigstringaf.sub prefix_size ~off:0 ~len in
         [
-          prelude; prefix_size;
+          prelude;
+          prefix_size;
           Bigstringaf.of_string ~off:common ~len:(ce.ce_length - common) a;
           padding;
         ]
@@ -716,7 +717,7 @@ let load :
       let fd = Unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o600 in
       let stat = Unix.fstat fd in
       let mmap =
-        Mmap.V1.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false
+        Unix.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false
           [| stat.Unix.st_size |]
       in
       Unix.close fd;

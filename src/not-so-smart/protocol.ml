@@ -97,8 +97,7 @@ end
 module Proto_request = struct
   type t = {
     path : string;
-    host :
-      [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] * int option;
+    host : string * int option;
     version : int;
     request_command : [ `Upload_pack | `Receive_pack | `Upload_archive ];
   }
@@ -118,15 +117,13 @@ module Proto_request = struct
       | `Upload_archive -> Fmt.pf ppf "git-upload-archive"
     in
     let pp_host ppf = function
-      | `Domain host, Some port -> Fmt.pf ppf "%a:%d" Domain_name.pp host port
-      | `Domain host, None -> Fmt.pf ppf "%a" Domain_name.pp host
-      | `Addr v, Some port -> Fmt.pf ppf "%a:%d" Ipaddr.pp v port
-      | `Addr v, None -> Ipaddr.pp ppf v
+      | host, Some port -> Fmt.pf ppf "%s:%d" host port
+      | host, None -> Fmt.string ppf host
     in
     Fmt.pf ppf "%a %s %a %a" pp_request_command request_command path
-      Fmt.(prefix (const string " host=") pp_host)
+      Fmt.(const string " host=" ++ pp_host)
       host
-      Fmt.(prefix (const string " version=") int)
+      Fmt.(const string " version=" ++ int)
       version
 end
 
@@ -195,6 +192,26 @@ module Commands = struct
     commands : ('uid, 'ref) command * ('uid, 'ref) command list;
   }
 
+  let capabilities { capabilities; _ } = capabilities
+
+  let pp_command pp_uid pp_ref ppf = function
+    | Create (uid, r) ->
+        Fmt.pf ppf "@[<1>(Create@ @[<1>(%a,@ %a)@])@]" pp_uid uid pp_ref r
+    | Delete (uid, r) ->
+        Fmt.pf ppf "@[<1>(Delete@ @[<1>(%a,@ %a)@])@]" pp_uid uid pp_ref r
+    | Update (a, b, r) ->
+        Fmt.pf ppf "@[<1>(Update@ @[<1>(%a,@ %a,@ %a)@])@]" pp_uid a pp_uid b
+          pp_ref r
+
+  let pp pp_uid pp_ref ppf { capabilities; commands } =
+    Fmt.pf ppf "{ @[<hov>capabilities= @[<hov>%a@];@ commands= @[<hov>%a@];@] }"
+      Fmt.(Dump.list Capability.pp)
+      capabilities
+      Fmt.(
+        Dump.pair (pp_command pp_uid pp_ref)
+          Dump.(list (pp_command pp_uid pp_ref)))
+      commands
+
   let create uid reference = Create (uid, reference)
   let delete uid reference = Delete (uid, reference)
   let update a b reference = Update (a, b, reference)
@@ -221,16 +238,19 @@ end
 module Status = struct
   type 'ref t = {
     result : (unit, string) result;
-    commands : ('ref, 'ref * string) result list;
+    commands : [ `FF of 'ref | `OK of 'ref | `ER of 'ref * string ] list;
   }
 
+  let pp_commands pp_ref ppf = function
+    | `FF reference -> Fmt.pf ppf "fast-forward %a" pp_ref reference
+    | `OK reference -> Fmt.pf ppf "ok %a" pp_ref reference
+    | `ER (reference, err) -> Fmt.pf ppf "error on %a: %s" pp_ref reference err
+
   let pp ppf { result; commands } =
-    let ok_with_ref ppf ref = Fmt.pf ppf "%s:ok" ref in
-    let error_with_ref ppf (ref, err) = Fmt.pf ppf "%s:%s" ref err in
     Fmt.pf ppf "{ @[<hov>result= %a;@ commands= @[<hov>%a@];@] }"
       Fmt.(Dump.result ~ok:(const string "done") ~error:string)
       result
-      Fmt.(Dump.list (Dump.result ~ok:ok_with_ref ~error:error_with_ref))
+      Fmt.(Dump.list (pp_commands string))
       commands
 
   let to_result { result; _ } = result
@@ -238,8 +258,9 @@ module Status = struct
   let map ~f { result; commands } =
     let commands =
       let fold = function
-        | Ok ref -> Ok (f ref)
-        | Error (ref, err) -> Error (f ref, err)
+        | `FF ref -> `FF (f ref)
+        | `OK ref -> `OK (f ref)
+        | `ER (ref, err) -> `ER (f ref, err)
       in
       List.map fold commands
     in
@@ -251,17 +272,17 @@ module Status = struct
         | Ok (Commands.Create (_, ref))
         | Ok (Commands.Delete (_, ref))
         | Ok (Commands.Update (_, _, ref)) ->
-            Ok ref
+            `OK ref
         | Error
             ( ( Commands.Create (_, ref)
               | Commands.Delete (_, ref)
               | Commands.Update (_, _, ref) ),
               err ) ->
-            Error (ref, err)
+            `ER (ref, err)
       in
       List.map map cmds
     in
-    if List.exists Rresult.R.is_error commands then
+    if List.exists (function `ER _ -> true | _ -> false) commands then
       { result = Error err; commands }
     else { result = Ok (); commands }
 end
@@ -279,8 +300,10 @@ module Decoder = struct
     | `Invalid_ack of string
     | `Invalid_result of string
     | `Invalid_command_result of string
+    | `Invalid_command of string
     | `Unexpected_flush
-    | `Invalid_pkt_line ]
+    | `Unexpected_pkt_line of string
+    | `Invalid_pkt_line of string ]
 
   let pp_error ppf = function
     | #Pkt_line.Decoder.error as err -> Pkt_line.Decoder.pp_error ppf err
@@ -295,6 +318,8 @@ module Decoder = struct
     | `Invalid_command_result raw ->
         Fmt.pf ppf "Invalid result command (%S)" raw
     | `Unexpected_flush -> Fmt.string ppf "Unexpected flush"
+    | `Unexpected_pkt_line raw -> Fmt.pf ppf "Unexpected pkt-line (%S)" raw
+    | `Invalid_command cmd -> Fmt.pf ppf "Invalid command (%S)" cmd
 
   let is_new_line = function '\n' -> true | _ -> false
 
@@ -313,8 +338,6 @@ module Decoder = struct
   let v_version = String.Sub.of_string "version"
   let v_nak = String.Sub.of_string "NAK"
   let v_ack = String.Sub.of_string "ACK"
-  let v_ok = String.Sub.of_string "ok"
-  let v_ng = String.Sub.of_string "ng"
 
   let decode_advertised_refs decoder =
     let decode_shallows advertised_refs decoder =
@@ -387,9 +410,22 @@ module Decoder = struct
               capabilities
           in
           junk_pkt decoder;
-          return
-            { Advertised_refs.capabilities; refs = []; version; shallows = [] }
-            decoder
+          let k decoder =
+            let pkt = peek_pkt decoder in
+            if String.Sub.length pkt = 0 then (
+              junk_pkt decoder;
+              return
+                {
+                  Advertised_refs.capabilities;
+                  refs = [];
+                  version;
+                  shallows = [];
+                }
+                decoder)
+            else
+              fail decoder (`Invalid_advertised_ref (String.Sub.to_string pkt))
+          in
+          prompt_pkt k decoder
       | None -> fail decoder (`Invalid_advertised_ref (String.Sub.to_string v))
     in
 
@@ -538,37 +574,32 @@ module Decoder = struct
   let junk_pack_without_sideband (decoder : decoder) =
     decoder.pos <- decoder.max
 
-  let decode_pack ?(side_band = false) ~push_pack ~push_stdout ~push_stderr
-      decoder =
+  let decode_pack ?(side_band = false) ~push_stdout ~push_stderr decoder =
     let with_side_band decoder =
       let v = peek_pkt ~trim:false decoder in
       match String.Sub.head v with
       | Some '\001' ->
-          let off = String.Sub.start_pos v + 1 in
-          let len = String.Sub.stop_pos v - off in
-          let buf = String.Sub.base_string v in
-          push_pack (buf, off, len);
+          let str = String.Sub.to_string (String.Sub.tail v) in
           junk_pkt decoder;
-          return true decoder
+          return (`Payload (str, 0, String.length str)) decoder
       | Some '\002' ->
           let tail = String.Sub.to_string (String.Sub.tail v) (* copy *) in
           push_stdout tail;
           junk_pkt decoder;
-          return true decoder
+          return `Stdout decoder
       | Some '\003' ->
           let tail = String.Sub.to_string (String.Sub.tail v) (* copy *) in
           push_stderr tail;
           junk_pkt decoder;
-          return true decoder
+          return `Stderr decoder
       | Some _ -> fail decoder (`Invalid_side_band (String.Sub.to_string v))
-      | None -> return false decoder
+      | None -> return `End_of_transmission decoder
     in
-    let end_of_pack decoder () = return false decoder in
+    let end_of_pack decoder () = return `End_of_transmission decoder in
     let without_side_band decoder =
       let buf, off, len = peek_pack_without_sideband decoder in
-      push_pack (buf, off, len);
       junk_pack_without_sideband decoder;
-      return true decoder
+      return (`Payload (buf, off, len)) decoder
     in
     if side_band then prompt_pkt ~strict:true with_side_band decoder
     else prompt_pack_without_sideband without_side_band end_of_pack decoder
@@ -598,7 +629,7 @@ module Decoder = struct
     prompt_pkt (go []) decoder
 
   let decode_negotiation decoder =
-    let k decoder =
+    let rec k decoder =
       let pkt = peek_pkt decoder in
       if String.Sub.equal_bytes pkt v_nak then (
         junk_pkt decoder;
@@ -621,101 +652,162 @@ module Decoder = struct
             | "common" -> return (Negotiation.ACK_common uid) decoder
             | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt)))
         | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt))
-      else assert false
+      else (
+        junk_pkt decoder;
+        prompt_pkt k decoder)
     in
     prompt_pkt k decoder
 
-  let rec bind x ~f =
-    match x with
-    | Done v -> f v
-    | Read { buffer; off; len; continue; eof } ->
-        let continue len = bind (continue len) ~f in
-        let eof () = bind (eof ()) ~f in
-        Read { buffer; off; len; continue; eof }
-    | Error _ as err -> err
-
-  let ( >>= ) x f = bind x ~f
+  let decode_flush decoder =
+    let k decoder =
+      let pkt = peek_pkt decoder in
+      if String.Sub.length pkt = 0 then return () decoder
+      else fail decoder (`Unexpected_pkt_line (String.Sub.to_string pkt))
+    in
+    prompt_pkt k decoder
 
   let decode_status decoder =
-    let command pkt =
-      match String.Sub.cuts ~sep:v_space pkt with
-      | res :: reference :: rest -> (
-          match String.Sub.to_string res with
-          | "ok" -> Stdlib.Ok (Stdlib.Ok (String.Sub.to_string reference))
-          | "ng" ->
-              let err = String.Sub.(to_string (concat ~sep:v_space rest)) in
-              let reference = String.Sub.to_string reference in
-              Stdlib.Ok (Stdlib.Error (reference, err))
-          | _ ->
-              Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt)))
-      | _ -> Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt))
+    let command decoder =
+      let pkt = peek_pkt decoder in
+      if String.Sub.length pkt = 0 then Stdlib.Ok None
+      else
+        match String.Sub.cuts ~sep:v_space pkt with
+        | res :: reference :: rest -> (
+            match String.Sub.to_string res with
+            | "ok" -> Stdlib.Ok (Some (`OK (String.Sub.to_string reference)))
+            | "ng" ->
+                let err = String.Sub.(to_string (concat ~sep:v_space rest)) in
+                let reference = String.Sub.to_string reference in
+                Stdlib.Ok (Some (`ER (reference, err)))
+            | "ff" -> Stdlib.Ok (Some (`FF (String.Sub.to_string reference)))
+            | _ ->
+                Stdlib.Error
+                  (`Invalid_command_result (String.Sub.to_string pkt)))
+        | _ -> Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt))
     in
 
-    let commands decoder =
+    let commands res decoder =
       let rec go acc decoder =
-        let pkt = peek_pkt decoder in
-        if String.Sub.length pkt = 0 then return (List.rev acc) decoder
-        else if
-          String.Sub.is_prefix ~affix:v_ok pkt
-          || String.Sub.is_prefix ~affix:v_ng pkt
-        then
-          match command pkt with
-          | Ok x ->
-              junk_pkt decoder;
-              prompt_pkt (go (x :: acc)) decoder
-          | Error err -> fail decoder err
-        else fail decoder (`Invalid_command_result (String.Sub.to_string pkt))
+        match command decoder with
+        | Ok (Some x) ->
+            junk_pkt decoder;
+            prompt_pkt (go (x :: acc)) decoder
+        | Ok None ->
+            return { Status.result = res; commands = List.rev acc } decoder
+        | Error err -> fail decoder err
       in
-      prompt_pkt (go []) decoder
+      go [] decoder
     in
 
     let result decoder =
       let pkt = peek_pkt decoder in
       match String.Sub.cut ~sep:v_space pkt with
-      | None -> fail decoder (`Invalid_result (String.Sub.to_string pkt))
+      | None -> return { Status.result = Stdlib.Ok (); commands = [] } decoder
       | Some (_unpack, res) -> (
           match String.Sub.(to_string (trim res)) with
           | "ok" ->
               junk_pkt decoder;
-              return (Stdlib.Ok ()) decoder
+              prompt_pkt (commands (Stdlib.Ok ())) decoder
           | err ->
               junk_pkt decoder;
-              return (Stdlib.Error err) decoder)
+              prompt_pkt (commands (Stdlib.Error err)) decoder)
     in
-    prompt_pkt result decoder >>= fun result ->
-    prompt_pkt commands decoder >>= fun commands ->
-    return { Status.result; Status.commands } decoder
 
-  (* XXX(dinosaure): even if we handle with and without sideband, currently the
-     default [decode_status] parse a sideband. On the Irmin side, sideband is
-     used in any case but we should improve [protocol.ml] and pass true
-     [sideband] value. *)
+    prompt_pkt result decoder
 
   let decode_status ?(sideband = true) decoder =
-    let with_sideband decoder =
+    match sideband with
+    | true ->
+        let rec go buf decoder =
+          let pkt = peek_pkt ~trim:false decoder in
+          match String.Sub.head pkt with
+          | Some '\001' ->
+              let str = String.Sub.(to_string (tail pkt)) in
+              Buffer.add_string buf str;
+              junk_pkt decoder;
+              prompt_pkt (go buf) decoder
+          | Some _ ->
+              junk_pkt decoder;
+              prompt_pkt (go buf) decoder
+          | None ->
+              let decoder' = of_string (Buffer.contents buf) in
+              decode_status decoder'
+        in
+        prompt_pkt (go (Buffer.create 0x100)) decoder
+    | false -> decode_status decoder
+
+  let decode_commands decoder =
+    let rec rest_commands ({ Commands.commands = first, rest; _ } as res)
+        decoder =
       let pkt = peek_pkt decoder in
-      match String.Sub.head pkt with
-      | Some '\001' ->
-          let str = String.Sub.(to_string (tail pkt)) in
-          let decoder' = of_string str in
-          decode_status decoder' >>= fun res ->
+      match String.Sub.cuts ~sep:v_space pkt with
+      | [ oid0; oid1; reference ] ->
+          let reference = String.Sub.to_string reference in
+          let commands =
+            match
+              String.Sub.for_all is_zero oid0, String.Sub.for_all is_zero oid1
+            with
+            | true, false ->
+                ( first,
+                  Commands.Create (String.Sub.to_string oid1, reference) :: rest
+                )
+            | false, true ->
+                ( first,
+                  Commands.Delete (String.Sub.to_string oid0, reference) :: rest
+                )
+            | false, false ->
+                ( first,
+                  Commands.Update
+                    ( String.Sub.to_string oid0,
+                      String.Sub.to_string oid1,
+                      reference )
+                  :: rest )
+            | _ -> assert false
+          in
           junk_pkt decoder;
-          prompt_pkt (return res) decoder
-      | Some _ -> assert false (* TODO *)
+          prompt_pkt (rest_commands { res with commands }) decoder
+      | _ -> return (Some res) decoder
+    in
+    let first_command decoder =
+      let pkt = peek_pkt decoder in
+      match String.Sub.cut ~sep:v_zero pkt with
+      | Some (cmd, capabilities) -> (
+          let capabilities = String.Sub.fields capabilities in
+          let capabilities =
+            List.map
+              (Capability.of_string <.> String.Sub.to_string)
+              capabilities
+          in
+          match String.Sub.cuts ~sep:v_space cmd with
+          | [ oid0; oid1; reference ] ->
+              let reference = String.Sub.to_string reference in
+              let commands =
+                match
+                  ( String.Sub.for_all is_zero oid0,
+                    String.Sub.for_all is_zero oid1 )
+                with
+                | true, false ->
+                    Commands.Create (String.Sub.to_string oid1, reference), []
+                | false, true ->
+                    Commands.Delete (String.Sub.to_string oid0, reference), []
+                | false, false ->
+                    ( Commands.Update
+                        ( String.Sub.to_string oid0,
+                          String.Sub.to_string oid1,
+                          reference ),
+                      [] )
+                | true, true -> assert false
+              in
+              junk_pkt decoder;
+              prompt_pkt
+                (rest_commands { Commands.capabilities; commands })
+                decoder
+          | _ -> fail decoder (`Invalid_command (String.Sub.to_string cmd)))
       | None ->
           junk_pkt decoder;
-          return { Status.result = Ok (); Status.commands = [] } decoder
+          return None decoder
     in
-    let without_sideband decoder =
-      let pkt = peek_pkt decoder in
-      if String.Sub.length pkt <> 0 then
-        fail decoder (`Invalid_command_result (String.Sub.to_string pkt))
-      else (
-        junk_pkt decoder;
-        return { Status.result = Ok (); Status.commands = [] } decoder)
-    in
-    if sideband then prompt_pkt with_sideband decoder
-    else prompt_pkt without_sideband decoder
+    prompt_pkt first_command decoder
 end
 
 module Encoder = struct
@@ -756,16 +848,12 @@ module Encoder = struct
       let version = Fmt.str "version=%d" version in
       write encoder version
     in
-    let pp_host ppf = function
-      | `Domain v -> Domain_name.pp ppf v
-      | `Addr v -> Ipaddr.pp ppf v
-    in
     let write_host encoder = function
       | host, Some port ->
-          let host = Fmt.str "host=%a:%d" pp_host host port in
+          let host = Fmt.str "host=%s:%d" host port in
           write encoder host
       | host, None ->
-          let host = Fmt.str "host=%a" pp_host host in
+          let host = Fmt.str "host=%s" host in
           write encoder host
     in
     let k encoder =

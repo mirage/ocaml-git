@@ -1,8 +1,7 @@
-let domain_name = Alcotest.testable Domain_name.pp Domain_name.equal
-let ipaddr = Alcotest.testable Ipaddr.pp (fun a b -> Ipaddr.compare a b = 0)
 let ( <.> ) f g x = f (g x)
-let github_com = Domain_name.(host_exn <.> of_string_exn) "github.com"
-let private_network = Ipaddr.of_string_exn "10.0.0.0"
+let github_com = "github.com"
+let private_network = "10.0.0.0"
+let uri_testable = Alcotest.testable Uri.pp Uri.equal
 
 let test01 =
   Alcotest.test_case "edn01" `Quick @@ fun () ->
@@ -10,11 +9,11 @@ let test01 =
   | Ok
       {
         Smart_git.Endpoint.scheme = `SSH "git";
-        host = `Domain v;
+        hostname;
         port = None;
         path = "mirage/ocaml.git";
       } ->
-      Alcotest.(check domain_name) "github.com" v github_com
+      Alcotest.(check string) "github.com" hostname github_com
   | Ok v -> Alcotest.failf "Unexpected Git endpoint: %a" Smart_git.Endpoint.pp v
   | Error (`Msg err) -> Alcotest.failf "Unexpected error: %S" err
 
@@ -24,11 +23,11 @@ let test02 =
   | Ok
       {
         Smart_git.Endpoint.scheme = `SSH "git";
-        host = `Addr v;
+        hostname;
         port = None;
         path = "mirage/ocaml.git";
       } ->
-      Alcotest.(check ipaddr) "10.0.0.0" v private_network
+      Alcotest.(check string) "10.0.0.0" hostname private_network
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
   | Error (`Msg err) -> Alcotest.failf "Unexpected error: %S" err
 
@@ -38,11 +37,11 @@ let test03 =
   | Ok
       {
         Smart_git.Endpoint.scheme = `SSH "git";
-        host = `Addr v;
+        hostname;
         port = None;
         path = "mirage/ocaml.git";
       } ->
-      Alcotest.(check ipaddr) "10.0.0.0" v private_network
+      Alcotest.(check string) "10.0.0.0" hostname private_network
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
   | Error (`Msg err) -> Alcotest.failf "Unexpected error: %S" err
 
@@ -52,11 +51,11 @@ let test04 =
   | Ok
       {
         Smart_git.Endpoint.scheme = `Git;
-        host = `Domain v;
+        hostname;
         port = None;
         path = "/mirage/ocaml.git";
       } ->
-      Alcotest.(check domain_name) "github.com" v github_com
+      Alcotest.(check string) "github.com" hostname github_com
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
   | Error (`Msg err) -> Alcotest.failf "Unexpected error: %S" err
 
@@ -66,11 +65,11 @@ let test05 =
   | Ok
       {
         Smart_git.Endpoint.scheme = `HTTP [];
-        host = `Domain v;
+        hostname;
         port = None;
         path = "/mirage/ocaml.git";
       } ->
-      Alcotest.(check domain_name) "github.com" v github_com
+      Alcotest.(check string) "github.com" hostname github_com
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
   | Error (`Msg err) -> Alcotest.failf "Unexpected error: %S" err
 
@@ -80,14 +79,33 @@ let test06 =
   | Ok
       {
         Smart_git.Endpoint.scheme = `HTTP [];
-        host = `Addr v;
+        hostname;
         port = None;
         path = "/mirage/ocaml.git";
       } ->
-      Alcotest.(check ipaddr) "10.0.0.0" v private_network
+      Alcotest.(check string) "10.0.0.0" hostname private_network
+  | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
+  | Error (`Msg err) -> Alcotest.failf "Unexpected error: %S" err
+
+let test07 =
+  Alcotest.test_case "edn07" `Quick @@ fun () ->
+  let uri = "http://git.data.coop/halfd/new-website.git" in
+  match Smart_git.Endpoint.of_string uri with
+  | Ok
+      ({
+         Smart_git.Endpoint.scheme = `HTTP [];
+         hostname = "git.data.coop";
+         port = None;
+         path = "/halfd/new-website.git";
+       } as edn) ->
+      let ctx = Smart_git.Endpoint.to_ctx edn Mimic.empty in
+      Alcotest.(check (option uri_testable))
+        "uri"
+        (Mimic.get Smart_git.git_uri ctx)
+        (Some (Uri.of_string uri))
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
   | Error (`Msg err) -> Alcotest.failf "Unexpected error: %S" err
 
 let () =
   Alcotest.run "smart git endpoint"
-    [ "endpoint", [ test01; test02; test03; test04; test05; test06 ] ]
+    [ "endpoint", [ test01; test02; test03; test04; test05; test06; test07 ] ]

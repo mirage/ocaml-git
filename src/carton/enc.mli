@@ -14,9 +14,7 @@ val make_entry :
 val length : 'uid entry -> int
 
 type 'uid q
-
 and 'uid p
-
 and 'uid patch
 
 type ('uid, 's) load = 'uid -> (Dec.v, 's) io
@@ -26,6 +24,8 @@ type 'uid uid = { uid_ln : int; uid_rw : 'uid -> string }
 val target_to_source : 'uid q -> 'uid p
 val target_uid : 'uid q -> 'uid
 val target_length : 'uid q -> int
+val target_patch : 'uid q -> 'uid patch option
+val source_of_patch : 'uid patch -> 'uid
 
 val entry_to_target :
   's scheduler -> load:('uid, 's) load -> 'uid entry -> ('uid q, 's) io
@@ -69,22 +69,33 @@ end
 
 module N : sig
   type encoder
-  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window }
+  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.Lz77.window }
 
   val encoder :
-    's scheduler -> b:b -> load:('uid, 's) load -> 'uid q -> (encoder, 's) io
+    's scheduler ->
+    ?level:int ->
+    b:b ->
+    load:('uid, 's) load ->
+    'uid q ->
+    (encoder, 's) io
 
   val encode : o:Bigstringaf.t -> encoder -> [ `Flush of encoder * int | `End ]
   val dst : encoder -> Bigstringaf.t -> int -> int -> encoder
 end
 
-type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window; o : Bigstringaf.t }
+type b = {
+  i : Bigstringaf.t;
+  q : De.Queue.t;
+  w : De.Lz77.window;
+  o : Bigstringaf.t;
+}
 
 val encode_header : o:Bigstringaf.t -> int -> int -> int
 val header_of_pack : length:int -> Bigstringaf.t -> int -> int -> unit
 
 val encode_target :
   's scheduler ->
+  ?level:int ->
   b:b ->
   find:('uid, 's) find ->
   load:('uid, 's) load ->

@@ -18,7 +18,10 @@
 let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Sched = Carton.Make (struct type 'a t = 'a end)
+
+module Sched = Carton.Make (struct
+  type 'a t = 'a
+end)
 
 type 'hash t = {
   values : ('hash, 'hash Value.t Lazy.t) Hashtbl.t;
@@ -56,6 +59,7 @@ let batch_write :
       Carton.Dec.weight_of_offset ~map pack ~weight:Carton.Dec.null offset
     in
     let raw = Carton.Dec.make_raw ~weight in
+    Log.debug (fun m -> m "Unpack %08Lx from the given PACK file." offset);
     let res = Carton.Dec.of_offset ~map pack raw ~cursor:offset in
     let inflated =
       Cstruct.of_bigarray (Carton.Dec.raw res) ~off:0 ~len:(Carton.Dec.len res)
@@ -171,7 +175,7 @@ module Make (Digestif : Digestif.S) = struct
       Lwt.return_ok (hash, Int64.to_int (Value.length value)))
 
   let digest kind raw =
-    let len = Cstruct.len raw in
+    let len = Cstruct.length raw in
     let ctx = Hash.init () in
     let hdr =
       Fmt.str "%s %d\000%!"
@@ -256,6 +260,11 @@ module Make (Digestif : Digestif.S) = struct
     match read t h with
     | Error _ -> Lwt.fail (failuref "%a not found" Hash.pp h)
     | Ok v -> Lwt.return v
+
+  let read_opt t h =
+    match read t h with
+    | Error (`Not_found _) -> Lwt.return (Ok None)
+    | Ok v -> Lwt.return (Ok (Some v))
 
   let contents t =
     let open Lwt.Infix in
@@ -411,7 +420,7 @@ end
 
 module Store = Make (Digestif.SHA1)
 
-module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
+module Sync (Git_store : Minimal.S) = struct
   let src = Logs.Src.create "git-mem.sync" ~doc:"logs git-mem's sync event"
 
   module Log = (val Logs.src_log src : Logs.LOG)
@@ -434,24 +443,26 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
 
     type 'm fd = Idx.fd
 
-    let create : type a. mode:a mode -> t -> uid -> (a fd, error) result fiber =
-     fun ~mode:_ t uid -> create t uid
+    let create :
+        type a.
+        ?trunc:bool -> mode:a mode -> t -> uid -> (a fd, error) result fiber =
+     fun ?trunc:_ ~mode:_ t uid -> create t uid
 
     let move _ ~src:_ ~dst:_ = assert false
     let map _ _ ~pos:_ _ = assert false
   end
 
-  include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Git_store) (HTTP)
+  include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Git_store)
 
   let stream_of_cstruct ?(chunk = 0x1000) payload =
     let stream, emitter = Lwt_stream.create () in
     let fill () =
       let rec go pos =
-        if pos = Cstruct.len payload then (
+        if pos = Cstruct.length payload then (
           emitter None;
           Lwt.return_unit)
         else
-          let len = min chunk (Cstruct.len payload - pos) in
+          let len = min chunk (Cstruct.length payload - pos) in
           let tmp = Bytes.create len in
           Cstruct.blit_to_bytes payload pos tmp 0 len;
           emitter (Some (Bytes.unsafe_to_string tmp));
@@ -462,8 +473,9 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
     Lwt.async fill;
     fun () -> Lwt_stream.get stream
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx edn store
-      ?version ?capabilities ?deepen want =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx edn
+      store ?version ?capabilities ?deepen want =
+    let open Lwt.Infix in
     let t_idx = Carton.Dec.Idx.Device.device () in
     let t_pck = Cstruct_append.device () in
     let index = Carton.Dec.Idx.Device.create t_idx in
@@ -478,7 +490,11 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
       let pack = Cstruct_append.project t_pck dst in
       stream_of_cstruct pack
     in
-    fetch ~push_stdout ~push_stderr ~ctx edn store ?version ?capabilities
-      ?deepen want ~src ~dst ~idx:index ~create_idx_stream ~create_pack_stream
-      t_pck t_idx
+    fetch ~push_stdout ~push_stderr ?threads ~ctx edn store ?version
+      ?capabilities ?deepen want ~src ~dst ~idx:index ~create_idx_stream
+      ~create_pack_stream t_pck t_idx
+    >>= fun res ->
+    let _dst = Sys.opaque_identity dst in
+    let _src = Sys.opaque_identity src in
+    Lwt.return res
 end

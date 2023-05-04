@@ -100,8 +100,8 @@ module Dec = struct
   module Verify (Uid : Carton.UID) = struct
     include Carton.Dec.Verify (Uid) (Lwt_scheduler) (Lwt_io)
 
-    let verify ~threads ~map ~oracle t ~matrix =
-      verify ~threads ~map ~oracle t ~matrix
+    let verify ~threads ~map ~oracle ~verbose t ~matrix =
+      verify ~threads ~map ~oracle ~verbose t ~matrix
   end
 
   module Ip (Uid : Carton.UID) = Carton.Dec.Ip (Lwt_scheduler) (Lwt_io) (Uid)
@@ -160,7 +160,7 @@ module Enc = struct
   type b = Carton.Enc.b = {
     i : Bigstringaf.t;
     q : De.Queue.t;
-    w : De.window;
+    w : De.Lz77.window;
     o : Bigstringaf.t;
   }
 

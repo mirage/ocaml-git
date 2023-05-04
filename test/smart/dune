@@ -1,22 +1,72 @@
 (executable
  (name test)
- (modules append fifo hTTP loopback lwt_backend ref store_backend test uid
-   unix_backend pipe)
- (libraries bigarray-compat capability git.nss.state mirage-flow mimic
-   git.nss.unixiz git git-unix result curl.lwt mirage-crypto-rng.unix
-   digestif digestif.c domain-name git.nss git.nss.wire-proto-v2 git.nss.git
-   bos fpath carton-lwt bigstringaf git.nss.sigs git.nss.hkt fmt git.nss.pck
-   carton rresult alcotest git.nss.smart lwt.unix mmap astring lwt cstruct
-   uri fmt.tty logs.fmt alcotest-lwt cohttp-lwt-unix git-cohttp-unix))
+ (modules
+  append
+  fifo
+  hTTP
+  loopback
+  lwt_backend
+  ref
+  store_backend
+  test
+  uid
+  unix_backend
+  pipe)
+ (libraries
+  alcotest
+  alcotest-lwt
+  astring
+  bigstringaf
+  bos
+  carton
+  carton-lwt
+  capability
+  cstruct
+  digestif
+  digestif.c
+  domain-name
+  fmt
+  fmt.tty
+  fpath
+  git
+  git.nss
+  git.nss.git
+  git.nss.hkt
+  git.nss.pck
+  git.nss.pkt-line
+  git.nss.sigs
+  git.nss.smart
+  git.nss.state
+  git.nss.unixiz
+  git.nss.wire-proto-v2
+  git-unix
+  git_version
+  logs
+  logs.fmt
+  lwt
+  lwt.unix
+  mimic
+  mirage-crypto-rng
+  mirage-crypto-rng.unix
+  mirage-flow
+  ptime
+  ptime.clock.os
+  result
+  rresult
+  unix
+  uri
+))
 
 (executable
  (name test_edn)
  (modules test_edn)
- (libraries alcotest fmt ipaddr domain-name git.nss.git))
+ (libraries alcotest fmt ipaddr domain-name git.nss.git mimic uri))
 
 (rule
  (alias runtest)
- (package git)
+ (package git-unix)
+ (enabled_if
+  (= %{os_type} "Unix"))
  (deps
   (:test test.exe)
   pack-testzone-0.pack

@@ -2,7 +2,7 @@ open Rresult
 
 type configuration = { stateless : bool }
 
-let configuration ?(stateless = true) () = { stateless }
+let configuration ?(stateless = false) () = { stateless }
 
 module S = Sigs
 
@@ -57,9 +57,8 @@ struct
     let ctx = Smart.Context.make ~client_caps in
     State_flow.run sched fail Smart.pp_error io flow (fiber ctx) |> prj
     >>= fun advertised_refs ->
-    Pck.commands sched
-      ~capabilities:(Smart.Advertised_refs.capabilities advertised_refs)
-      ~equal:Ref.equal ~deref:access.Sigs.deref store cmds
+    Pck.commands sched ~capabilities:client_caps ~equal:Ref.equal
+      ~deref:access.Sigs.deref store cmds
       (Smart.Advertised_refs.refs advertised_refs)
     |> prj
     >>= function
@@ -91,7 +90,7 @@ struct
           Smart.Context.is_cap_shared ctx `Side_band
           || Smart.Context.is_cap_shared ctx `Side_band_64k
         in
-        let pack = Smart.send_pack ~stateless:push_cfg.stateless side_band in
+        let pack = Smart.send_pack ~stateless side_band in
         let rec go () =
           stream () >>= function
           | None ->
@@ -105,6 +104,12 @@ struct
                   Smart.(recv ctx status)
                 |> prj
                 >>| Smart.Status.map ~f:Ref.v
+              else if uses_git_transport then
+                Smart_flow.run sched fail io flow Smart.(recv ctx recv_flush)
+                |> prj
+                >>= fun () ->
+                let cmds = List.map R.ok (Smart.Commands.commands cmds) in
+                return (Smart.Status.v cmds)
               else
                 let cmds = List.map R.ok (Smart.Commands.commands cmds) in
                 return (Smart.Status.v cmds)

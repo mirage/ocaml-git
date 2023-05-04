@@ -1,7 +1,43 @@
 (library
  (name git_unix)
  (public_name git-unix)
- (modules git_unix packed_refs)
- (libraries bigarray-compat decompress.de bos astring carton git.nss.smart
-   rresult result bigstringaf fmt git.nss.git fpath digestif mmap git
-   logs.fmt lwt lwt.unix))
+ (modules git_unix git_unix_mimic packed_refs)
+ (libraries
+  tcpip
+  ipaddr
+  git-mirage.tcp
+  git-mirage.ssh
+  git-mirage.http
+  mirage-clock-unix
+  mirage-unix
+  mirage-time
+  happy-eyeballs-lwt
+  ptime
+  ptime.clock.os
+  ipaddr.unix
+  ca-certs-nss
+  mirage-clock
+  decompress.de
+  domain-name
+  tls
+  tls-mirage
+  bos
+  mimic
+  astring
+  carton
+  git.nss.smart
+  rresult
+  result
+  bigstringaf
+  fmt
+  git.nss.git
+  fpath
+  digestif
+  git
+  logs
+  logs.fmt
+  cstruct
+  mirage-flow
+  lwt
+  lwt.unix
+  unix))

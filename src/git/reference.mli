@@ -27,6 +27,7 @@ val segs : t -> string list
 val pp : t Fmt.t
 val head : t
 val master : t
+val main : t
 val ( / ) : t -> string -> t
 val ( // ) : t -> t -> t
 val to_string : t -> string

@@ -18,9 +18,10 @@ module N : sig
   val encode : encoder -> ret
 
   val encoder :
+    ?level:int ->
     i:Zl.bigstring ->
     q:De.Queue.t ->
-    w:Zl.window ->
+    w:De.Lz77.window ->
     source:int ->
     H.bigstring ->
     dst ->
@@ -72,7 +73,7 @@ end = struct
             encode_z { e with z }
         | d ->
             H.N.dst e.h e.t 0 (De.bigstring_length e.t);
-            encode_h e d)
+            encode_h { e with z } d)
 
   and encode_h e d =
     let v, d = match d with v :: d -> v, d | [] -> `End, [] in
@@ -91,14 +92,14 @@ end = struct
 
   let encode e = encode_z e
 
-  let encoder ~i ~q ~w ~source src dst hunks =
+  let encoder ?(level = 4) ~i ~q ~w ~source src dst hunks =
     let o, o_pos, o_max =
       match dst with
       | `Manual -> De.bigstring_empty, 1, 0
       | `Buffer _ | `Channel _ ->
           De.bigstring_create H.io_buffer_size, 0, H.io_buffer_size - 1
     in
-    let z = Zl.Def.encoder `Manual `Manual ~q ~w ~level:0 in
+    let z = Zl.Def.encoder `Manual `Manual ~q ~w ~level in
     let z = Zl.Def.dst z De.bigstring_empty 0 0 in
     {
       dst;

@@ -14,6 +14,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
+
 module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) : sig
   type hash = Hash.t
   type store = Store.t

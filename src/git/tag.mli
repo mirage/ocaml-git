@@ -18,7 +18,7 @@
 (** A Git Tag object.
 
     A tag containing a reference pointing to another object, which can contain a
-    message just like a {!Commit}. It can also contain a (PGP) signature, in
+    message just like a {!module:Commit}. It can also contain a (PGP) signature, in
     which case it is called a "signed tag object". *)
 
 type kind = Blob | Commit | Tag | Tree
@@ -34,7 +34,7 @@ module type S = sig
   type hash
   type nonrec t = hash t
 
-  val make : hash -> kind -> ?tagger:User.t -> tag:string -> string -> t
+  val make : hash -> kind -> ?tagger:User.t -> tag:string -> string option -> t
   (** [make hash kind ?tagger ~tag descr] makes a new tag with the kind [kind]
       by the [tagger] with the name [tag] and the description [descr].
 
@@ -56,7 +56,7 @@ module type S = sig
   val tag : t -> string
   (** [tag t] returns the information of the given tag. *)
 
-  val message : t -> string
+  val message : t -> string option
   val kind : t -> kind
   val tagger : t -> User.t option
 end

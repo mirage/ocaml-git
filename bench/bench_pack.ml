@@ -1,4 +1,7 @@
-module Unix_scheduler = Carton.Make (struct type 'a t = 'a end)
+module Unix_scheduler = Carton.Make (struct
+  type 'a t = 'a
+end)
+
 open Unix_scheduler
 
 let bomb_pack = "../test/carton/bomb.pack"

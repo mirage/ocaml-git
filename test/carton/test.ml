@@ -33,7 +33,7 @@ let () = Random.full_init seed
 
 open Prelude
 
-let failf fmt = Fmt.kstr Alcotest.fail fmt
+let failf fmt = Alcotest.failf fmt
 
 let bigstringaf =
   Alcotest.testable
@@ -46,7 +46,7 @@ let physical_equal =
 
 let loads =
   Alcotest.test_case "load" `Quick @@ fun () ->
-  let chunk = Int64.to_int Carton.Dec.W.length in
+  let chunk = 1024 * 1024 in
   let payload = Bigstringaf.create (chunk * 2) in
   randomize payload;
   let do_mmap = ref false in
@@ -60,7 +60,7 @@ let loads =
     do_mmap := true;
     Bigstringaf.sub payload ~off:(Int64.to_int pos) ~len
   in
-  let w = Carton.Dec.W.make payload in
+  let w = Carton.Dec.W.make ~sector:(Int64.of_int chunk) payload in
   let slice0 = Carton.Dec.W.load ~map w 0L in
   Alcotest.(check bool) "first load" (Option.is_some slice0) true;
   let slice0 = Option.get slice0 in
@@ -138,7 +138,10 @@ let empty_pack, uid_empty_pack =
       let dst = Fpath.(current / "pack-null") in
       ( Bos.OS.Dir.with_tmp "git-%s" @@ fun path ->
         Bos.OS.Dir.with_current path @@ fun () ->
-        Bos.OS.Cmd.run_status Bos.Cmd.(v "git" % "init") >>| fun _ ->
+        Bos.OS.Cmd.run_status Bos.Cmd.(v "git" % "init") >>= fun _ ->
+        Bos.OS.Cmd.run
+          Bos.Cmd.(v "git" % "config" % "init.defaultBranch" % "master")
+        >>| fun () ->
         let out = Bos.OS.Cmd.(run_io cmd in_null) in
         Bos.OS.Cmd.out_file dst out )
         ()
@@ -251,8 +254,8 @@ let digest_like_git ~kind ?(off = 0) ?len buf =
 let verify_empty_pack () =
   Alcotest.test_case "verify empty pack" `Quick @@ fun () ->
   let t =
-    Carton.Dec.make () ~z ~allocate ~uid_ln:Uid.length ~uid_rw:Uid.of_raw_string
-      (fun _ -> Alcotest.fail "Invalid call to IDX")
+    Carton.Dec.make () ~sector:512L ~z ~allocate ~uid_ln:Uid.length
+      ~uid_rw:Uid.of_raw_string (fun _ -> Alcotest.fail "Invalid call to IDX")
   in
   let map () ~pos length =
     let len = min length (Int64.to_int pos - String.length empty_pack) in
@@ -266,7 +269,7 @@ let verify_empty_pack () =
       weight = (fun ~cursor:_ -> Alcotest.fail "Invalid call to [weight]");
     }
   in
-  IO.run (Verify.verify ~threads:1 ~map ~oracle t ~matrix:[||])
+  IO.run (Verify.verify ~threads:1 ~map ~oracle ~verbose:ignore t ~matrix:[||])
 
 module Idx = Carton.Dec.Idx.N (Uid)
 
@@ -278,6 +281,9 @@ let empty_index, uid_empty_index =
     ( Bos.OS.Dir.with_tmp "git-%s" @@ fun path ->
       Bos.OS.Dir.with_current path @@ fun () ->
       Bos.OS.Cmd.run_status Bos.Cmd.(v "git" % "init") >>= fun _ ->
+      Bos.OS.Cmd.run
+        Bos.Cmd.(v "git" % "config" % "init.defaultBranch" % "master")
+      >>= fun () ->
       let cmd = Bos.Cmd.(v "git" % "pack-objects" % "-q" % "--stdout") in
       let out = Bos.OS.Cmd.(run_io cmd in_null) in
       Bos.OS.Cmd.out_run_in out >>= fun in_cmd ->
@@ -520,7 +526,7 @@ let verify_bomb_pack () =
     Carton.Dec.make { fd; mx } ~z ~allocate ~uid_ln:Uid.length
       ~uid_rw:Uid.of_raw_string (fun _ -> Alcotest.fail "Invalid call to IDX")
   in
-  IO.run (Verify.verify ~threads:1 ~map ~oracle t ~matrix);
+  IO.run (Verify.verify ~threads:1 ~map ~oracle ~verbose:ignore t ~matrix);
   Unix.close fd;
 
   let offsets =
@@ -668,7 +674,7 @@ let unpack_bomb_pack () =
   in
 
   let oracle, matrix = first_pass () in
-  IO.run (Verify.verify ~threads:1 ~map ~oracle pack ~matrix);
+  IO.run (Verify.verify ~threads:1 ~map ~oracle ~verbose:ignore pack ~matrix);
   Alcotest.(check pass) "verify" () ();
   let unpack status =
     let cursor = Verify.offset_of_status status in
@@ -752,7 +758,7 @@ let pack_bomb_pack () =
       Carton.Enc.o = Bigstringaf.create De.io_buffer_size;
       Carton.Enc.i = Bigstringaf.create De.io_buffer_size;
       Carton.Enc.q = De.Queue.create 0x10000;
-      Carton.Enc.w = De.make_window ~bits:15;
+      Carton.Enc.w = De.Lz77.make_window ~bits:15;
     }
   in
 
@@ -828,13 +834,11 @@ let cycle () =
   randomize b;
   let ea =
     Carton.Enc.make_entry ~kind:`A ~length:(Bigstringaf.length a)
-      ~delta:(Carton.Enc.From `B)
-      `A
+      ~delta:(Carton.Enc.From `B) `A
   in
   let eb =
     Carton.Enc.make_entry ~kind:`A ~length:(Bigstringaf.length b)
-      ~delta:(Carton.Enc.From `A)
-      `B
+      ~delta:(Carton.Enc.From `A) `B
   in
 
   let load = function
@@ -863,7 +867,7 @@ let cycle () =
       Carton.Enc.o = Bigstringaf.create De.io_buffer_size;
       Carton.Enc.i = Bigstringaf.create De.io_buffer_size;
       Carton.Enc.q = De.Queue.create 0x10000;
-      Carton.Enc.w = De.make_window ~bits:15;
+      Carton.Enc.w = De.Lz77.make_window ~bits:15;
     }
   in
 
@@ -988,8 +992,7 @@ let decode_index_stream () =
       let ic = Unix.openfile "git-bomb.idx" Unix.[ O_RDONLY ] 0o644 in
       let ln = (Unix.fstat ic).Unix.st_size in
       let mp =
-        Mmap.V1.map_file ic ~pos:0L Bigarray.char Bigarray.c_layout false
-          [| ln |]
+        Unix.map_file ic ~pos:0L Bigarray.char Bigarray.c_layout false [| ln |]
       in
       Unix.close ic;
 
@@ -1026,6 +1029,47 @@ let empty_stream () =
   | `Malformed _ -> Alcotest.(check pass) "no infinite loop" () ()
   | _ -> Alcotest.fail "Unexpected result of [decode]"
 
+let huge_pack () =
+  Alcotest.test_case "big offset" `Quick @@ fun () ->
+  let encoder =
+    Idx.encoder `Manual ~pack:(Uid.of_hex "")
+      [|
+        {
+          Carton.Dec.Idx.crc = Checkseum.Crc32.default;
+          offset = 0L;
+          uid = Uid.digest "foo";
+        };
+        {
+          Carton.Dec.Idx.crc = Checkseum.Crc32.default;
+          offset = Int64.(add (of_int32 Int32.max_int) 1L);
+          uid = Uid.digest "bar";
+        };
+      |]
+  in
+  Idx.dst encoder o 0 (Bigstringaf.length o);
+  let cur = ref 0 in
+  let rec go () =
+    match Idx.encode encoder `Await with
+    | `Partial ->
+        let pos = Bigstringaf.length o - !cur - Idx.dst_rem encoder in
+        Idx.dst encoder o pos (Bigstringaf.length o - pos);
+        cur := !cur + pos;
+        go ()
+    | `Ok -> Bigstringaf.sub o ~off:0 ~len:!cur
+  in
+  let idx =
+    Carton.Dec.Idx.make (go ()) ~uid_ln:Uid.length ~uid_rw:Uid.to_raw_string
+      ~uid_wr:Uid.of_raw_string
+  in
+  Alcotest.(check (option (pair optint int64)))
+    "foo, offset"
+    (Carton.Dec.Idx.find idx (Uid.digest "foo"))
+    (Some (Checkseum.Crc32.default, 0L));
+  Alcotest.(check (option (pair optint int64)))
+    "bar, big offset"
+    (Carton.Dec.Idx.find idx (Uid.digest "bar"))
+    (Some (Checkseum.Crc32.default, Int64.(add (of_int32 Int32.max_int) 1L)))
+
 let v1_9_0 =
   {
     Git_version.major = 1;
@@ -1046,22 +1090,44 @@ let git_version =
       | Some version -> version
       | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
 
+let tmp = "tmp"
+
 let () =
+  let fiber =
+    let open Bos in
+    let open Rresult in
+    OS.Dir.current () >>= fun current ->
+    OS.Dir.create Fpath.(current / tmp) >>= fun _ -> R.ok Fpath.(current / tmp)
+  in
+  let tmp = Rresult.R.failwith_error_msg fiber in
+  Bos.OS.Dir.set_default_tmp tmp;
+
   Alcotest.run "carton"
     [
-      "weights", [ weights ]; "loads", [ loads ];
+      "weights", [ weights ];
+      "loads", [ loads ];
       ( "decoder",
         [
-          valid_empty_pack (); verify_empty_pack (); check_empty_index ();
-          verify_bomb_pack (); first_entry_of_bomb_pack (); unpack_bomb_pack ();
-          decode_index_stream (); empty_stream ();
+          valid_empty_pack ();
+          verify_empty_pack ();
+          check_empty_index ();
+          verify_bomb_pack ();
+          first_entry_of_bomb_pack ();
+          unpack_bomb_pack ();
+          decode_index_stream ();
+          empty_stream ();
+          huge_pack ();
         ] );
       ( "encoder",
         [
-          test_empty_pack (); index_of_empty_pack (); index_of_one_entry ();
+          test_empty_pack ();
+          index_of_empty_pack ();
+          index_of_one_entry ();
           (* XXX(dinosaure): it seems that a bug exists in Git (not ocaml-git)
              on git-index-pack until 1.9.0. *)
           (if Git_version.compare v1_9_0 git_version <= 0 then pack_bomb_pack ()
-          else fake_pack_bomb_pack ()); cycle ();
-        ] ); "lwt", [ Test_lwt.test_map_yield ];
+           else fake_pack_bomb_pack ());
+          cycle ();
+        ] );
+      "lwt", [ Test_lwt.test_map_yield ];
     ]

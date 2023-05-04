@@ -2,9 +2,27 @@
  (name test)
  (flags
   (:standard -thread))
- (libraries lwt lwt.unix result rresult fpath decompress.de decompress.zl
-   optint fmt bigarray-compat bigstringaf base64 bos checkseum.c digestif.c
-   mmap unix threads carton carton-lwt alcotest))
+ (libraries
+  git_version
+  lwt
+  lwt.unix
+  result
+  rresult
+  fpath
+  decompress.de
+  decompress.zl
+  optint
+  fmt
+  bigstringaf
+  base64
+  bos
+  checkseum.c
+  digestif.c
+  unix
+  threads
+  carton
+  carton-lwt
+  alcotest))
 
 (rule
  (alias runtest)

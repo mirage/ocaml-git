@@ -2,8 +2,17 @@
  (name loose)
  (modules loose)
  (public_name git.loose)
- (libraries fmt result carton decompress.de decompress.zl checkseum cstruct
-   bigstringaf logs rresult))
+ (libraries
+  fmt
+  result
+  carton
+  decompress.de
+  decompress.zl
+  checkseum
+  cstruct
+  bigstringaf
+  logs
+  rresult))
 
 (library
  (name loose_lwt)
@@ -20,5 +29,16 @@
 (library
  (name loose_git_unix)
  (modules loose_git_unix)
- (libraries fmt bigarray-compat bigstringaf result rresult mmap fpath lwt
-   lwt.unix loose carton carton-lwt cstruct loose_lwt))
+ (libraries
+  fmt
+  bigstringaf
+  result
+  rresult
+  fpath
+  lwt
+  lwt.unix
+  loose
+  carton
+  carton-lwt
+  cstruct
+  loose_lwt))

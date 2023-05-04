@@ -27,16 +27,21 @@ module Witness = struct
   type 'a recv =
     | Advertised_refs : (string, string) Advertised_refs.t recv
     | Result : string Result.t recv
-    | Status : string Status.t recv
+    | Status : bool -> string Status.t recv
     | Packet : bool -> string recv
+    | Commands : (string, string) Commands.t option recv
     | Recv_pack : {
         side_band : bool;
-        push_pack : string * int * int -> unit;
         push_stdout : string -> unit;
         push_stderr : string -> unit;
       }
-        -> bool recv
+        -> [ `Payload of string * int * int
+           | `End_of_transmission
+           | `Stdout
+           | `Stderr ]
+           recv
     | Ack : string Negotiation.t recv
+    | Flush : unit recv
     | Shallows : string Shallow.t list recv
 end
 
@@ -91,15 +96,17 @@ module Value = struct
     in
     transl
       (let open Protocol.Decoder in
-      match w with
-      | Advertised_refs -> decode_advertised_refs decoder
-      | Result -> decode_result decoder
-      | Recv_pack { side_band; push_pack; push_stdout; push_stderr } ->
-          decode_pack ~side_band ~push_pack ~push_stdout ~push_stderr decoder
-      | Ack -> decode_negotiation decoder
-      | Status -> decode_status decoder
-      | Shallows -> decode_shallows decoder
-      | Packet trim -> decode_packet ~trim decoder)
+       match w with
+       | Advertised_refs -> decode_advertised_refs decoder
+       | Result -> decode_result decoder
+       | Commands -> decode_commands decoder
+       | Recv_pack { side_band; push_stdout; push_stderr } ->
+           decode_pack ~side_band ~push_stdout ~push_stderr decoder
+       | Ack -> decode_negotiation decoder
+       | Status sideband -> decode_status ~sideband decoder
+       | Flush -> decode_flush decoder
+       | Shallows -> decode_shallows decoder
+       | Packet trim -> decode_packet ~trim decoder)
 end
 
 type ('a, 'err) t = ('a, 'err) State.t =
@@ -122,14 +129,14 @@ let advertised_refs = Advertised_refs
 let want = Want
 let negotiation_done = Done
 let negotiation_result = Result
-let commands = Commands
+let commands : _ send = Commands
 
-let recv_pack ?(side_band = false) ?(push_stdout = ignore)
-    ?(push_stderr = ignore) push_pack =
-  Recv_pack { side_band; push_pack; push_stdout; push_stderr }
+let recv_pack ?(push_stdout = ignore) ?(push_stderr = ignore) side_band =
+  Recv_pack { side_band; push_stdout; push_stderr }
 
-let status = Status
-let flush = Flush
+let recv_flush : _ recv = Flush
+let status sideband = Status sideband
+let flush : _ send = Flush
 let ack = Ack
 let shallows = Shallows
 

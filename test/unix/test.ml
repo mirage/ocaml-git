@@ -15,6 +15,34 @@ let reporter ppf =
   in
   { Logs.report }
 
+let v2_28_0 =
+  {
+    Git_version.major = 2;
+    minor = 28;
+    patch = Some "0";
+    revision = None;
+    release_candidate = None;
+  }
+
+let git_version =
+  match
+    Bos.(
+      OS.Cmd.run_out Cmd.(v "git" % "--version") |> OS.Cmd.out_string ~trim:true)
+  with
+  | Error (`Msg err) -> failwith err
+  | Ok (str, _) -> (
+      match Git_version.parse str with
+      | Some version -> version
+      | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
+
+let git_init_with_branch branch =
+  let open Bos in
+  let open Rresult in
+  if Git_version.compare git_version v2_28_0 < 0 then
+    OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+    OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % branch)
+  else OS.Cmd.run Cmd.(v "git" % "init" % "-b" % branch)
+
 let () = Fmt_tty.setup_std_outputs ~style_renderer:`Ansi_tty ~utf_8:true ()
 let () = Logs.set_reporter (reporter Fmt.stderr)
 let () = Logs.set_level ~all:true (Some Logs.Debug)
@@ -225,6 +253,65 @@ let pack_file =
   | Ok () -> ()
   | Error err -> Alcotest.failf "%a" Store.pp_error err
 
+let author () =
+  {
+    Git.User.name = "Romain Calascibetta";
+    email = "romain.calascibetta@gmail.com";
+    date =
+      (let ptime = Ptime.unsafe_of_d_ps (Ptime_clock.now_d_ps ()) in
+       let tz =
+         match Ptime_clock.current_tz_offset_s () with
+         | Some s ->
+             let sign = if s < 0 then `Minus else `Plus in
+             let hours = s / 3600 in
+             let minutes = s mod 3600 / 60 in
+             Some { Git.User.sign; hours; minutes }
+         | None -> None
+       in
+       Int64.of_float (Ptime.to_float_s ptime), tz);
+  }
+
+let empty_commit =
+  Alcotest.test_case "empty commit" `Quick @@ fun store ->
+  let empty_tree = Store.Value.(tree Tree.(v [])) in
+  let c0 root parent =
+    let author = author () in
+    Store.Value.(
+      commit
+        (Commit.make ~tree:root ~author ~committer:author ~parents:[ parent ]
+           None))
+  in
+  let path = Store.root store in
+  let fiber0 =
+    let open Rresult in
+    R.join
+    <.> Bos.OS.Dir.with_current path @@ fun () ->
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
+        >>= fun () ->
+        Bos.OS.Cmd.run
+          Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
+        >>= fun () ->
+        Bos.OS.Cmd.run
+          Bos.Cmd.(v "git" % "commit" % "--allow-empty" % "-m" % ".")
+  in
+  let fiber1 () =
+    Store.Ref.resolve store Git.Reference.master >>? fun parent ->
+    Store.write store empty_tree >>? fun (tree, _) ->
+    Store.write store (c0 tree parent) >>? fun (commit, _) ->
+    Store.Ref.write store Git.Reference.master (Git.Reference.uid commit)
+  in
+  let fiber2 () =
+    let open Rresult in
+    fiber0 ()
+    >>= (Lwt_main.run <.> fiber1)
+    >>= (R.join
+        <.> Bos.OS.Dir.with_current path @@ fun () ->
+            Bos.OS.Cmd.run Bos.Cmd.(v "git" % "fsck"))
+  in
+  match fiber2 () with
+  | Ok _ -> Alcotest.(check pass) "git fsck" () ()
+  | Error err -> Alcotest.failf "store: %a" Store.pp_error err
+
 open Cmdliner
 
 let store =
@@ -239,33 +326,53 @@ let store =
   let pp ppf store = Fpath.pp ppf (Store.root store) in
   Arg.conv (parser, pp)
 
-let random =
-  let create () =
-    let open Rresult in
-    Bos.OS.Dir.tmp "git-%s" >>= fun root ->
-    Bos.OS.Dir.with_current root
-      (fun () ->
-        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init") >>= fun () -> R.ok root)
-      ()
-  in
-  match Rresult.(R.join (create ())) with
-  | Ok v -> Rresult.R.get_ok (Lwt_main.run (Store.v v))
-  | Error err -> Fmt.failwith "%a" Rresult.R.pp_msg err
-
-let store =
-  let doc = "A git repository." in
-  Arg.(value & opt store random & info [ "git" ] ~doc)
-
-let run = Test.test store
-let () = Lwt_main.run run
+let tmp = "tmp"
 
 let () =
+  let fiber =
+    let open Bos in
+    let open Rresult in
+    OS.Dir.current () >>= fun current ->
+    OS.Dir.create Fpath.(current / tmp) >>= fun _ -> R.ok Fpath.(current / tmp)
+  in
+  let tmp = Rresult.R.failwith_error_msg fiber in
+  Bos.OS.Dir.set_default_tmp tmp;
+
+  let random =
+    let create () =
+      let open Rresult in
+      Bos.OS.Dir.tmp "git-%s" >>= fun root ->
+      ( Bos.OS.Dir.with_current root @@ fun () ->
+        git_init_with_branch "master" >>= fun () -> R.ok root )
+        ()
+    in
+    match Rresult.(R.join (create ())) with
+    | Ok v -> Rresult.R.get_ok (Lwt_main.run (Store.v v))
+    | Error err -> Fmt.failwith "%a" Rresult.R.pp_msg err
+  in
+
+  let store =
+    let doc = "A git repository." in
+    Arg.(value & opt store random & info [ "git" ] ~doc)
+  in
+
+  Lwt_main.run (Test.test store);
+
+  (* XXX(dinosaure): completely weird... I don't have time to try
+     to find a better way to execute common tests and Unix-specific
+     tests. TODO! *)
   Alcotest.run_with_args "git-unix" store
     [
       "init", [ git_init ];
       ( "write",
         [
-          check_blobs_with_git; check_trees_with_git; check_commits_with_git;
-          check_tags_with_git; check_references_with_git;
-        ] ); "packed-refs", [ packed_refs ]; "pack", [ pack_file ];
+          check_blobs_with_git;
+          check_trees_with_git;
+          check_commits_with_git;
+          check_tags_with_git;
+          check_references_with_git;
+          empty_commit;
+        ] );
+      "packed-refs", [ packed_refs ];
+      "pack", [ pack_file ];
     ]

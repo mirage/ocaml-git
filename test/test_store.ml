@@ -7,6 +7,7 @@ let random_string len =
 
 let is_not_refname = function
   | ' ' | '~' | '^' | ':' | '?' | '*' | '|' | '<' | '>' -> true
+  | '"' | '.' -> true (* XXX(dinosaure): windows. *)
   | chr -> if Char.code chr < 32 || Char.code chr > 126 then true else false
 
 let random_reference () =
@@ -56,26 +57,27 @@ struct
       [
         ( Astring.String.map replace_zero (random_string 256),
           `Normal,
-          Store.Value.Blob.digest v2 ); "a", `Dir, Store.Value.Tree.digest t2;
+          Store.Value.Blob.digest v2 );
+        "a", `Dir, Store.Value.Tree.digest t2;
       ]
 
   let john_doe =
     {
       Git.User.name = "John Doe";
       email = "john@doe.org";
-      date = Random.int64 Int64.max_int, None;
+      date = Int64.of_int (Random.int (0x40000000 - 1)), None;
     }
 
   let c1 =
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t2)
-      ~author:john_doe ~committer:john_doe "hello r1"
+      ~author:john_doe ~committer:john_doe (Some "hello r1")
 
   let c2 =
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t4)
       ~parents:[ Store.Value.Commit.digest c1 ]
-      ~author:john_doe ~committer:john_doe "hello r1!"
+      ~author:john_doe ~committer:john_doe (Some "hello r1!")
 
   let c3 =
     Store.Value.Commit.make
@@ -89,7 +91,7 @@ struct
     {
       Git.User.name = "Thomas Gazagnaire";
       email = "thomas@gazagnaire.org";
-      date = Random.int64 Int64.max_int, None;
+      date = Int64.of_int (Random.int (0x40000000 - 1)), None;
     }
 
   let c4 =
@@ -98,7 +100,7 @@ struct
       ~parents:[ Store.Value.Commit.digest c3 ]
       ~author:thomas ~committer:thomas
       ~extra:[ "simple-key", [ "simple value" ] ]
-      "with extra-fields"
+      (Some "with extra-fields")
 
   let gpg =
     [
@@ -109,24 +111,27 @@ struct
       "RPCv03yBx9vEAbTVe4kj1jS+FAcYHTyd+zqKio8kjLgL1KyjIO7GRsjRW1q+VLIX";
       "ZffaDvLU6hRdHhxxsZ6tA9sLWgfHv0Z+tgpafQrAJkwZc/zRpITA4U54xxEvrKaP";
       "BwpFgFK4IlgPC7h1ZxJMJyOL6R+dXpFTtY0vK7Apat886p+nbUJho/8Pn5OuVb8=";
-      "=DCpq"; "-----END PGP SIGNATURE-----";
+      "=DCpq";
+      "-----END PGP SIGNATURE-----";
     ]
 
   let c5 =
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t5)
       ~parents:[ Store.Value.Commit.digest c3 ]
-      ~author:thomas ~committer:thomas ~extra:[ "gpgsig", gpg ] "with GPG"
+      ~author:thomas ~committer:thomas
+      ~extra:[ "gpgsig", gpg ]
+      (Some "with GPG")
 
   let tt1 =
     Store.Value.Tag.make
       (Store.Value.Commit.digest c1)
-      Git.Tag.Commit ~tag:"foo" ~tagger:john_doe "Ho yeah!"
+      Git.Tag.Commit ~tag:"foo" ~tagger:john_doe (Some "Ho yeah!")
 
   let tt2 =
     Store.Value.Tag.make
       (Store.Value.Commit.digest c2)
-      Git.Tag.Commit ~tag:"bar" ~tagger:john_doe "Haha!"
+      Git.Tag.Commit ~tag:"bar" ~tagger:john_doe (Some "Haha!")
 
   let r1 = Git.Reference.v "refs/origin/head"
   let r2 = Git.Reference.v "refs/upstream/head"
@@ -378,12 +383,12 @@ struct
     let hashes = random_hashes 500 in
     let hashes = Array.to_list hashes in
     let set = Store.Hash.Set.of_list hashes in
-    let append hash = Store.shallow store hash >>= Lwt_unix.yield in
+    let append hash = Store.shallow store hash >>= Lwt.pause in
     let rec verify _unit =
       Store.shallowed store >>= fun hashes' ->
       let set' = Store.Hash.Set.of_list hashes' in
       Alcotest.(check bool) "subset" (Store.Hash.Set.subset set' set) true;
-      if not (Store.Hash.Set.equal set' set) then Lwt_unix.yield () >>= verify
+      if not (Store.Hash.Set.equal set' set) then Lwt.pause () >>= verify
       else Lwt.return_unit
     in
     Lwt.both
@@ -423,6 +428,7 @@ struct
         "write", [ test_blobs; test_trees; test_commits; test_tags ];
         "find", [ test_find_trees; test_find_commits; test_find_tags ];
         "reference", [ test_references; test_cycle; test_atomic ];
-        "search", [ test_search ]; "shallows", [ test_shallows ];
+        "search", [ test_search ];
+        "shallows", [ test_shallows ];
       ]
 end

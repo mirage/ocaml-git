@@ -44,10 +44,10 @@ struct
           | None -> return filled)
       | src :: _ ->
           let src = Cstruct.of_bigarray src in
-          let len = min (Cstruct.len inputs) (Cstruct.len src) in
+          let len = min (Cstruct.length inputs) (Cstruct.length src) in
           Cstruct.blit src 0 inputs 0 len;
           Ke.Rke.N.shift_exn ke len;
-          if len < Cstruct.len inputs then
+          if len < Cstruct.length inputs then
             go (filled + len) (Cstruct.shift inputs len)
           else return (filled + len)
     in
@@ -93,10 +93,9 @@ struct
     let matrix = Array.make max Verify.unresolved_node in
 
     let replace hashtbl k v =
-      try
-        let v' = Hashtbl.find hashtbl k in
-        if v < v' then Hashtbl.replace hashtbl k v'
-      with Not_found -> Hashtbl.add hashtbl k v
+      match Hashtbl.find_opt hashtbl k with
+      | Some v' -> if v' < v then Hashtbl.replace hashtbl k v
+      | None -> Hashtbl.add hashtbl k v
     in
 
     let rec go decoder =
@@ -187,7 +186,7 @@ struct
            uid ))
 
   type ('t, 'path, 'fd, 'error) fs = {
-    create : 't -> 'path -> ('fd, 'error) result IO.t;
+    create : ?trunc:bool -> 't -> 'path -> ('fd, 'error) result IO.t;
     append : 't -> 'fd -> string -> unit IO.t;
     map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t;
     close : 't -> 'fd -> (unit, 'error) result IO.t;
@@ -212,7 +211,7 @@ struct
     let zl_buffer = De.bigstring_create De.io_buffer_size in
     let allocate bits = De.make_window ~bits in
     let weight = ref 0L in
-    create t path >>? fun fd ->
+    create ~trunc:true t path >>? fun fd ->
     let stream () =
       stream () >>= function
       | Some (buf, off, len) as res ->
@@ -234,7 +233,8 @@ struct
       map t fd ~pos len
     in
     Log.debug (fun m -> m "Start to verify incoming PACK file (second pass).");
-    Verify.verify ~threads pack ~map ~oracle ~matrix >>= fun () ->
+    Verify.verify ~threads pack ~map ~oracle ~matrix ~verbose:ignore
+    >>= fun () ->
     Log.debug (fun m -> m "Second pass on incoming PACK file is done.");
     let offsets =
       Hashtbl.fold (fun k _ a -> k :: a) where []
@@ -282,6 +282,26 @@ struct
   type nonrec light_load = (Uid.t, Scheduler.t) light_load
   type nonrec heavy_load = (Uid.t, Scheduler.t) heavy_load
 
+  (* XXX(dinosaure): [fs = { create; append; ... }] has a argument about
+   * [trunc] to know if we want to write (and delete old contents) or simply
+   * read - and, in that case, keep contents.
+   *
+   * This argument was added to fix a problem about [Cstruct_append] which
+   * needs to know if we want to erase old contents or keep it and read it.
+   * However, on top of that, something else can help if we want to read or
+   * write. Capabilities exist at another level ([Rd], [Wr] and [RdWr]) and we
+   * should fallback them at this level. By this way, we can delete [trunc] and
+   * ensure that we write only new contents ([O_CREATE | O_TRUNC | O_APPEND])
+   * or read contents ([O_RDONLY]).
+   *
+   * Capabilities can not be applied at this level - at least, we can not
+   * constraint the ['fd] to be read-only or write-only - because we don't the
+   * high kind polymorphism for free.
+   *
+   * I'm not sure about a good solution on the API level and capabilities on
+   * this level. So we keep [trunc] for the moment but we should find a better
+   * solution, at least, on the API level, to decomplixify it. *)
+
   let canonicalize ~light_load ~heavy_load ~src ~dst t
       { create; append; close; map; _ } n uids weight =
     let b =
@@ -289,13 +309,13 @@ struct
         Carton.Enc.o = Bigstringaf.create De.io_buffer_size;
         Carton.Enc.i = Bigstringaf.create De.io_buffer_size;
         Carton.Enc.q = De.Queue.create 0x10000;
-        Carton.Enc.w = De.make_window ~bits:15;
+        Carton.Enc.w = De.Lz77.make_window ~bits:15;
       }
     in
     let ctx = ref Uid.empty in
     let cursor = ref 0L in
     let light_load uid = Scheduler.prj (light_load uid) in
-    create t dst >>? fun fd ->
+    create ~trunc:true t dst >>? fun fd ->
     let header = Bigstringaf.create 12 in
     Carton.Enc.header_of_pack ~length:(n + List.length uids) header 0 12;
     let hdr = Bigstringaf.to_string header in
@@ -355,7 +375,7 @@ struct
         append t fd (Uid.to_raw_string uid) >>= fun () ->
         return (Ok (Int64.(add !cursor (of_int Uid.length)), uid))
     in
-    create t src >>? fun src ->
+    create ~trunc:false t src >>? fun src ->
     go src 12L >>? fun (weight, uid) ->
     close t fd >>? fun () -> return (Ok (shift, weight, uid, entries))
 end

@@ -33,15 +33,16 @@ module Make (Flow : Mirage_flow.S) = struct
       >>? function
       | `Eof -> Lwt.return_ok `End_of_flow
       | `Data res ->
-          Ke.Rke.N.push flow.queue ~blit:blit0 ~length:Cstruct.len res;
-          let len = min (Cstruct.len payload) (Ke.Rke.length flow.queue) in
-          Ke.Rke.N.keep_exn flow.queue ~blit:blit1 ~length:Cstruct.len ~off:0
+          Ke.Rke.N.push flow.queue ~blit:blit0 ~length:Cstruct.length res;
+          let len = min (Cstruct.length payload) (Ke.Rke.length flow.queue) in
+          Ke.Rke.N.keep_exn flow.queue ~blit:blit1 ~length:Cstruct.length ~off:0
             ~len payload;
           Ke.Rke.N.shift_exn flow.queue len;
           Lwt.return_ok (`Input len))
     else
-      let len = min (Cstruct.len payload) (Ke.Rke.length flow.queue) in
-      Ke.Rke.N.keep_exn flow.queue ~blit:blit1 ~length:Cstruct.len ~len payload;
+      let len = min (Cstruct.length payload) (Ke.Rke.length flow.queue) in
+      Ke.Rke.N.keep_exn flow.queue ~blit:blit1 ~length:Cstruct.length ~len
+        payload;
       Ke.Rke.N.shift_exn flow.queue len;
       Lwt.return_ok (`Input len)
 
@@ -49,5 +50,5 @@ module Make (Flow : Mirage_flow.S) = struct
     Flow.write flow.flow payload >|= function
     | Error `Closed -> R.error (`Write_error `Closed)
     | Error err -> R.error (`Write_error err)
-    | Ok () -> R.ok (Cstruct.len payload)
+    | Ok () -> R.ok (Cstruct.length payload)
 end

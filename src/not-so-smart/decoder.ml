@@ -21,7 +21,7 @@ type error =
   | `No_enough_space
   | `Unexpected_end_of_input
   | `Assert_predicate of char -> bool
-  | `Invalid_pkt_line ]
+  | `Invalid_pkt_line of string ]
 
 let pp_error ppf = function
   | `End_of_input -> Fmt.string ppf "End of input"
@@ -33,7 +33,7 @@ let pp_error ppf = function
   | `No_enough_space -> Fmt.string ppf "No enough space"
   | `Unexpected_end_of_input -> Fmt.string ppf "Unexpected end of input"
   | `Assert_predicate _ -> Fmt.string ppf "Assert predicate"
-  | `Invalid_pkt_line -> Fmt.string ppf "Invalid PKT-line"
+  | `Invalid_pkt_line line -> Fmt.pf ppf "Invalid PKT-line (%S)" line
 
 type 'err info = {
   error : 'err;
@@ -259,7 +259,8 @@ let prompt :
         safe k decoder)
     with
     | _exn (* XXX(dinosaure): [at_least_one_pkt] can raise an exception. *) ->
-      fail decoder `Invalid_pkt_line
+      let line = Bytes.sub_string decoder.buffer decoder.pos off in
+      fail decoder (`Invalid_pkt_line line)
   in
   go decoder.max
 

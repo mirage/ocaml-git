@@ -62,7 +62,8 @@ let order =
   let lst =
     [
       Git.Tree.entry ~name:"foo.c" `Normal ();
-      Git.Tree.entry ~name:"foo" `Dir (); Git.Tree.entry ~name:"foo1" `Exec ();
+      Git.Tree.entry ~name:"foo" `Dir ();
+      Git.Tree.entry ~name:"foo1" `Exec ();
     ]
   in
   let r0 = Git.Tree.of_list lst in
@@ -155,4 +156,22 @@ let large =
   | Ok v1 -> Alcotest.(check tree) "large tree" v0 v1
   | Error _ -> Alcotest.fail "Error to parse large tree"
 
-let () = Alcotest.run "git-tree" [ "tree", [ order; large ] ]
+let larger =
+  Alcotest.test_case "larger" `Quick @@ fun () ->
+  let entries =
+    Array.init 30_000 (fun _ ->
+        let len = 1 + Random.int 255 in
+        let name = random_name len in
+        let perm = random_perm () in
+        let sha1 = random_sha1 () in
+        Git.Tree.entry ~name perm sha1)
+  in
+  let v0 = Git.Tree.v (Array.to_list entries) in
+  let p = Encore.to_angstrom Tree.format in
+  let d = Encore.to_lavoisier Tree.format in
+  let payload = Encore.Lavoisier.emit_string v0 d in
+  match parse_string p payload with
+  | Ok v1 -> Alcotest.(check tree) "larger tree" v0 v1
+  | Error _ -> Alcotest.fail "Error to parse larger tree"
+
+let () = Alcotest.run "git-tree" [ "tree", [ order; large; larger ] ]

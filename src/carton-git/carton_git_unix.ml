@@ -19,14 +19,17 @@ module Store = struct
    fun ppf -> function
     | `Not_found uid -> Fmt.pf ppf "%a not found" Fpath.pp uid
 
-  let create : type a. mode:a mode -> t -> uid -> (a fd, error) result fiber =
-   fun ~mode root path ->
+  let create :
+      type a.
+      ?trunc:bool -> mode:a mode -> t -> uid -> (a fd, error) result fiber =
+   fun ?(trunc = true) ~mode root path ->
     let flags, perm =
       match mode with
       | Rd -> Unix.[ O_RDONLY ], 0o400
       | Wr -> Unix.[ O_WRONLY; O_CREAT; O_APPEND ], 0o600
       | RdWr -> Unix.[ O_RDWR; O_CREAT; O_APPEND ], 0o600
     in
+    let flags = if trunc then Unix.O_TRUNC :: flags else flags in
     let path = Fpath.(root // path) in
     let process () =
       Lwt_unix.openfile (Fpath.to_string path) flags perm >>= fun fd ->
@@ -43,7 +46,7 @@ module Store = struct
    fun _ fd ~pos len ->
     let fd = Lwt_unix.unix_file_descr fd in
     let payload =
-      Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+      Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
     in
     Bigarray.array1_of_genarray payload
 

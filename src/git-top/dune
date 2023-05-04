@@ -1,5 +1,12 @@
 (library
  (name git_top)
  (public_name git-unix.top)
- (libraries digestif git-unix.index git-unix git fmt logs
-   compiler-libs.toplevel))
+ (libraries
+  digestif
+  git-unix.index
+  git-unix
+  git
+  fmt
+  logs
+  logs.fmt
+  compiler-libs.toplevel))

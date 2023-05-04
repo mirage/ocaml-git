@@ -14,7 +14,10 @@ module type STORE = sig
   type +'a fiber
 
   val pp_error : error Fmt.t
-  val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
+  val create :
+    ?trunc:bool -> mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
   val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t
   val close : t -> 'm fd -> (unit, error) result fiber
   val list : t -> uid list fiber
@@ -24,6 +27,7 @@ end
 module type IO = sig
   type +'a t
 
+  val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
   val bind : 'a t -> ('a -> 'b t) -> 'b t
   val return : 'a -> 'a t
 end
@@ -52,7 +56,7 @@ module Make
     (Store.uid, < rd : unit > Store.fd, Uid.t) t ->
     idx:Store.uid ->
     Store.uid ->
-    (unit, Store.error) result IO.t
+    (< rd : unit > Store.fd * int64, Store.error) result IO.t
 
   val get :
     Store.t ->
