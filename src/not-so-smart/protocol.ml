@@ -188,6 +188,7 @@ module Have = struct
   type 'uid t = 'uid list * [ `Done | `Flush ]
 
   let have ~cmd haves = haves, cmd
+  let map ~f (uids, cmd) = List.map f uids, cmd
 end
 
 module Result = struct
@@ -205,6 +206,8 @@ module Negotiation = struct
     | ACK_ready of 'uid
     | ACK_common of 'uid
 
+  let mk_ack uid = ACK uid
+  let mk_continue uid = ACK_continue uid
   let is_common = function ACK_common _ -> true | _ -> false
   let is_ready = function ACK_ready _ -> true | _ -> false
 

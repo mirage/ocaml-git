@@ -14,6 +14,7 @@ struct
   let src = Logs.Src.create "upload-pack"
 
   module Log = (val Logs.src_log src : Logs.LOG)
+  open Uid
   open Scheduler
 
   let ( >>= ) x f = IO.bind x f
@@ -37,6 +38,51 @@ struct
         pp_error = Flow.pp_error;
       }
 
+  module Server_neg = struct
+    (** Server-side common base negotiation. *)
+
+    type 'uid t = {
+      haves : 'uid list;
+      last_common : 'uid option;
+      has_common_base : bool;
+    }
+
+    let empty = { haves = []; last_common = None; has_common_base = false }
+
+    let compute_has_common_base _store (_access : _ S.access) ~wants:_ _t =
+      (* TODO: Compute whether all [wants] each have an ancestor in [t.haves]. *)
+      false
+
+    let mk_continue uid = Smart.Negotiation.mk_continue uid
+
+    (** Returns the commits that should be [ACK]ed and update the state. *)
+    let ack store (access : _ S.access) ~wants t new_haves =
+      let rec loop t acc = function
+        | [] -> return (t, List.rev acc)
+        | hd :: tl -> (
+            access.get hd store |> prj >>= function
+            | Some _ ->
+                let has_common_base =
+                  t.has_common_base
+                  || compute_has_common_base store access ~wants t
+                in
+                loop
+                  { t with has_common_base; haves = hd :: t.haves }
+                  (mk_continue hd :: acc) tl
+            | None ->
+                loop t
+                  (if t.has_common_base then mk_continue hd :: acc else acc)
+                  tl)
+      in
+      loop t [] new_haves
+
+    (** Return the final [ACK] or [None] if the negotiation failed. *)
+    let last_common t =
+      match t.last_common with
+      | Some uid -> Some (Smart.Negotiation.mk_ack uid)
+      | None -> None
+  end
+
   let upload_pack flow (access, _light_load, _heavy_load) store pack =
     let my_caps = [ `Multi_ack; `Side_band_64k; `Ofs_delta; `Thin_pack ] in
     let fiber ctx =
@@ -45,35 +91,43 @@ struct
       let* () = send ctx send_advertised_refs adv_ref in
       recv ctx recv_want
     in
-    let ctx = Smart.Context.make ~client_caps in
+    let ctx = Smart.Context.make ~my_caps in
     Smart_flow.run sched fail io flow (fiber ctx) |> prj >>= fun wants ->
-    let rec go haves =
-      let fiber ctx =
-        let open Smart in
-        let* h, cmd = recv ctx recv_have in
-        let haves = h @ haves in
-        match cmd with
-        | `Done ->
-            (* let common_base = compute_common_base store access wants in *)
-            return (new_have @ haves)
-        | `Flush ->
-            let acks = _ store access haves in
-            let* () = send ctx send_ack acks in
-            go haves
+    (* TODO: Check that all the [wants] are in the store and each are the tip of a ref. *)
+    Smart.Context.replace_their_caps ctx wants.Smart.Want.capabilities;
+
+    let rec negotiate neg =
+      Smart_flow.run sched fail io flow Smart.(recv ctx recv_have) |> prj
+      >>= fun have ->
+      let h, cmd =
+        (Smart.Have.map ~f:of_hex have :> Uid.t list * [ `Done | `Flush ])
       in
-      return (w, h) Smart_flow.run sched fail io flow haves |> prj
-      >>= fun haves -> _
+      Server_neg.ack store access ~wants neg h >>= fun (neg, acks) ->
+      let acks = List.map (Smart.Negotiation.map ~f:to_hex) acks in
+      Smart_flow.run sched fail io flow Smart.(send ctx send_acks acks) |> prj
+      >>= fun () ->
+      match cmd with
+      | `Done -> (
+          match Server_neg.last_common neg with
+          | Some ack ->
+              let ack = Smart.Negotiation.map ~f:to_hex ack in
+              Smart_flow.run sched fail io flow
+                Smart.(send ctx send_acks [ ack ])
+              |> prj
+              >>= fun () -> return neg
+          | None ->
+              Smart_flow.run sched fail io flow Smart.(send ctx send_acks [])
+              |> prj
+              >>= fun () -> return neg)
+      | `Flush -> negotiate neg
     in
-    go
-    (*
-        Not implemented: send shallow information
-        Go:
-           - recv have: string list * [`Flush | `Done]
-           - send acks for each commit acknowledged *)
-    >>=
-    fun haves ->
+    negotiate Server_neg.empty >>= fun neg ->
+    let sources =
+      let a, b = wants.wants in
+      List.map of_hex (a :: b)
+    in
     Pck.get_uncommon_objects sched ~compare:Uid.compare access store
-      ~exclude:haves ~sources:wants
+      ~exclude:neg.haves ~sources
     |> prj
     >>= fun uids ->
     Log.debug (fun m -> m "Prepare a pack of %d object(s)." (List.length uids));

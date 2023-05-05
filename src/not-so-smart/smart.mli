@@ -90,6 +90,7 @@ module Have : sig
   type 'uid t = private 'uid list * [ `Done | `Flush ]
 
   val have : cmd:[ `Done | `Flush ] -> 'uid list -> 'uid t
+  val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
 module Result : sig
@@ -105,6 +106,8 @@ module Negotiation : sig
     | ACK_ready of 'uid
     | ACK_common of 'uid
 
+  val mk_ack : 'uid -> 'uid t
+  val mk_continue : 'uid -> 'uid t
   val is_common : 'uid t -> bool
   val is_ready : 'uid t -> bool
   val pp : string t Fmt.t
