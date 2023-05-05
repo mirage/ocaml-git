@@ -79,7 +79,7 @@ struct
   let fetch_v1 ?(uses_git_transport = false) ?(push_stdout = ignore)
       ?(push_stderr = ignore) ~capabilities ?deepen ?want:(refs = `None) ~host
       path flow store access fetch_cfg pack =
-    let client_caps =
+    let my_caps =
       (* XXX(dinosaure): HTTP ([stateless]) enforces no-done capabilities. Otherwise, you never
          will receive the PACK file. *)
       if fetch_cfg.Neg.no_done && not (no_done capabilities) then
@@ -97,11 +97,11 @@ struct
       let* v = recv ctx advertised_refs in
       let v = Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v in
       let uids, refs = references refs (Smart.Advertised_refs.refs v) in
-      Smart.Context.replace_server_caps ctx
+      Smart.Context.replace_their_caps ctx
         (Smart.Advertised_refs.capabilities v);
       return (uids, refs)
     in
-    let ctx = Smart.Context.make ~client_caps in
+    let ctx = Smart.Context.make ~my_caps in
     let negotiator = Neg.make ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
     Smart_flow.run sched fail io flow (prelude ctx) |> prj

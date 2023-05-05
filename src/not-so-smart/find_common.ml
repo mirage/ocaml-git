@@ -126,15 +126,13 @@ let find_common (type t) scheduler io flow cfg
         Smart.(
           let uid = to_hex uid in
           let others = List.map (fun (uid, _) -> to_hex uid) others in
-          let { Smart.Context.client_caps; _ } =
-            Smart.Context.capabilities ctx
-          in
+          let { Smart.Context.my_caps; _ } = Smart.Context.capabilities ctx in
           let deepen =
             (deepen
               :> [ `Depth of int | `Not of string | `Timestamp of int64 ] option)
           in
           send ctx send_want
-            (Want.v ~capabilities:client_caps ~shallows:shallowed ?deepen
+            (Want.v ~capabilities:my_caps ~shallows:shallowed ?deepen
                (uid :: others)))
       >>= fun () ->
       (match deepen with

@@ -39,8 +39,8 @@ struct
         pp_error = Flow.pp_error;
       }
 
-  let push ?(uses_git_transport = false) ~capabilities:client_caps cmds ~host
-      path flow store access { stateless } pack =
+  let push ?(uses_git_transport = false) ~capabilities:my_caps cmds ~host path
+      flow store access { stateless } pack =
     let fiber ctx =
       let open Smart in
       let* () =
@@ -50,13 +50,13 @@ struct
         else return ()
       in
       let* v = recv ctx advertised_refs in
-      Context.replace_server_caps ctx (Smart.Advertised_refs.capabilities v);
+      Context.replace_their_caps ctx (Smart.Advertised_refs.capabilities v);
       return (Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v)
     in
-    let ctx = Smart.Context.make ~client_caps in
+    let ctx = Smart.Context.make ~my_caps in
     Smart_flow.run sched fail io flow (fiber ctx) |> prj
     >>= fun advertised_refs ->
-    Pck.commands sched ~capabilities:client_caps ~equal:Ref.equal
+    Pck.commands sched ~capabilities:my_caps ~equal:Ref.equal
       ~deref:access.Sigs.deref store cmds
       (Smart.Advertised_refs.refs advertised_refs)
     |> prj

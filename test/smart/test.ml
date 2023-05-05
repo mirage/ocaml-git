@@ -1784,7 +1784,7 @@ let test_push_capabilities () =
   | Ok () -> (
       let[@warning "-8"] (Some v) = !output in
       let decoder = Pkt_line.Decoder.of_string (Cstruct.to_string v) in
-      let ctx = Smart.Context.with_decoder ~client_caps:capabilities decoder in
+      let ctx = Smart.Context.with_decoder ~my_caps:capabilities decoder in
       match Smart.recv ctx Smart.recv_commands with
       | Smart.Return (Some v) ->
           let c = Smart.Commands.capabilities v in
