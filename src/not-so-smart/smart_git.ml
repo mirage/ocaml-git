@@ -179,7 +179,7 @@ module Endpoint = struct
       headers
 end
 
-module Make
+module Make_client
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
     (Index : APPEND with type +'a fiber = 'a Lwt.t)
@@ -670,18 +670,13 @@ end
 
 module Make_server
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
+    (Flow : Sigs.FLOW with type +'a fiber = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
     (Index : APPEND with type +'a fiber = 'a Lwt.t)
     (Uid : UID)
     (Ref : Sigs.REF) =
 struct
-  let upload_pack :
-      (Uid.t, _, _, 'g, Scheduler.t) Sigs.access
-      * Uid.t Carton_lwt.Thin.light_load
-      * Uid.t Carton_lwt.Thin.heavy_load ->
-      (Uid.t, _, 'g) Sigs.store ->
-      flow:Mimic.flow ->
-      (unit, ([> `Exn of exn ] as 'err)) result Lwt.t =
-   fun (access, light_load, heavy_load) store ~flow ->
-    Mimic.close flow >>= fun () -> Lwt.return_ok ()
+  module Upload_pack = Nss.Upload_pack.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
+
+  let upload_pack = Upload_pack.upload_pack
 end

@@ -1,5 +1,3 @@
-open Rresult
-
 type configuration = { stateless : bool }
 
 let configuration ?(stateless = false) () = { stateless }
@@ -39,7 +37,8 @@ struct
         pp_error = Flow.pp_error;
       }
 
-  let upload_pack flow store access pack =
+  let upload_pack flow (access, _light_load, _heavy_load) store pack =
+    let my_caps = [ `Multi_ack; `Side_band_64k; `Ofs_delta; `Thin_pack ] in
     let fiber ctx =
       let open Smart in
       let adv_ref = Advertised_refs.v1 ~capabilities:[] [] (* TODO *) in
