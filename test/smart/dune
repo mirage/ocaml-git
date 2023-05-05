@@ -1,5 +1,5 @@
-(executable
- (name test)
+(tests
+ (names test server)
  (modules
   append
   fifo

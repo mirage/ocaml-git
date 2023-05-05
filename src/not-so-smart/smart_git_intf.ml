@@ -119,6 +119,17 @@ module type SMART_GIT = sig
 
   val git_uri : Uri.t Mimic.value
 
+  module Make_stream_pack (Uid : UID) : sig
+    type 'a stream = unit -> 'a option Lwt.t
+
+    val pack :
+      light_load:Uid.t Carton_lwt.Thin.light_load ->
+      heavy_load:Uid.t Carton_lwt.Thin.heavy_load ->
+      Uid.t list ->
+      string stream
+    (** For a list of uids, construct and stream a pack. *)
+  end
+
   module Make_client
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
       (Pack : APPEND with type +'a fiber = 'a Lwt.t)

@@ -179,6 +179,101 @@ module Endpoint = struct
       headers
 end
 
+module Make_stream_pack (Uid : UID) = struct
+  type 'a stream = unit -> 'a option Lwt.t
+
+  module Delta = Carton_lwt.Enc.Delta (Uid) (Verbose)
+
+  let deltify ~light_load ~heavy_load ?(threads = 4) (uids : Uid.t list) =
+    let open Lwt.Infix in
+    let fold (uid : Uid.t) =
+      light_load uid >|= fun (kind, length) ->
+      Carton_lwt.Enc.make_entry ~kind ~length uid
+    in
+    Lwt_list.map_p fold uids >|= Array.of_list >>= fun entries ->
+    Delta.delta
+      ~threads:(List.init threads (fun _thread -> heavy_load))
+      ~weight:10 ~uid_ln:Uid.length entries
+    >>= fun targets -> Lwt.return (entries, targets)
+
+  let header = Bigstringaf.create 12
+
+  let pack ~(heavy_load : Uid.t Carton_lwt.Enc.load) stream targets =
+    let open Lwt.Infix in
+    let offsets = Hashtbl.create (Array.length targets) in
+    let find uid =
+      match Hashtbl.find offsets uid with
+      | v -> Lwt.return_some v
+      | exception Not_found -> Lwt.return_none
+    in
+    let uid =
+      { Carton.Enc.uid_ln = Uid.length; Carton.Enc.uid_rw = Uid.to_raw_string }
+    in
+    let b =
+      {
+        Carton.Enc.o = Bigstringaf.create De.io_buffer_size;
+        Carton.Enc.i = Bigstringaf.create De.io_buffer_size;
+        Carton.Enc.q = De.Queue.create 0x10000;
+        Carton.Enc.w = De.Lz77.make_window ~bits:15;
+      }
+    in
+    let ctx = ref Uid.empty in
+    let cursor = ref 0 in
+    Carton.Enc.header_of_pack ~length:(Array.length targets) header 0 12;
+    stream (Some (Bigstringaf.to_string header));
+    ctx := Uid.feed !ctx header ~off:0 ~len:12;
+    cursor := !cursor + 12;
+    let encode_targets targets =
+      let encode_target idx =
+        Hashtbl.add offsets (Carton.Enc.target_uid targets.(idx)) !cursor;
+        Carton_lwt.Enc.encode_target ~b ~find ~load:heavy_load ~uid
+          targets.(idx) ~cursor:!cursor
+        >>= fun (len, encoder) ->
+        let rec go encoder =
+          match Carton.Enc.N.encode ~o:b.o encoder with
+          | `Flush (encoder, len) ->
+              let payload = Bigstringaf.substring b.o ~off:0 ~len in
+              stream (Some payload);
+              ctx := Uid.feed !ctx b.o ~off:0 ~len;
+              cursor := !cursor + len;
+              let encoder =
+                Carton.Enc.N.dst encoder b.o 0 (Bigstringaf.length b.o)
+              in
+              go encoder
+          | `End -> Lwt.return ()
+        in
+        let payload = Bigstringaf.substring b.o ~off:0 ~len in
+        stream (Some payload);
+        ctx := Uid.feed !ctx b.o ~off:0 ~len;
+        cursor := !cursor + len;
+        let encoder = Carton.Enc.N.dst encoder b.o 0 (Bigstringaf.length b.o) in
+        go encoder
+      in
+      let rec go idx =
+        if idx < Array.length targets then
+          encode_target idx >>= fun () -> go (succ idx)
+        else Lwt.return ()
+      in
+      go 0
+    in
+    encode_targets targets >>= fun () ->
+    let uid = Uid.get !ctx |> Uid.to_raw_string in
+    stream (Some uid);
+    stream None;
+    Lwt.return_unit
+
+  let pack ~light_load ~heavy_load uids =
+    let open Lwt.Infix in
+    let stream, pusher = Lwt_stream.create () in
+    let fiber () =
+      deltify ~light_load ~heavy_load uids >>= fun (_, targets) ->
+      pack ~heavy_load pusher targets
+    in
+    let stream () = Lwt_stream.get stream in
+    Lwt.async fiber;
+    stream
+end
+
 module Make_client
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
@@ -190,6 +285,7 @@ struct
 
   module Log = (val Logs.src_log src : Logs.LOG)
   module Thin = Carton_lwt.Thin.Make (Uid)
+  module Stream_pack = Make_stream_pack (Uid)
 
   let fs =
     let open Rresult in
@@ -504,97 +600,6 @@ struct
     | Failure err -> Lwt.return_error (R.msg err)
     | exn -> Lwt.return_error (`Exn exn)
 
-  module Delta = Carton_lwt.Enc.Delta (Uid) (Verbose)
-
-  let deltify ~light_load ~heavy_load ?(threads = 4) (uids : Uid.t list) =
-    let open Lwt.Infix in
-    let fold (uid : Uid.t) =
-      light_load uid >|= fun (kind, length) ->
-      Carton_lwt.Enc.make_entry ~kind ~length uid
-    in
-    Lwt_list.map_p fold uids >|= Array.of_list >>= fun entries ->
-    Delta.delta
-      ~threads:(List.init threads (fun _thread -> heavy_load))
-      ~weight:10 ~uid_ln:Uid.length entries
-    >>= fun targets -> Lwt.return (entries, targets)
-
-  let header = Bigstringaf.create 12
-
-  let pack ~(heavy_load : Uid.t Carton_lwt.Enc.load) stream targets =
-    let open Lwt.Infix in
-    let offsets = Hashtbl.create (Array.length targets) in
-    let find uid =
-      match Hashtbl.find offsets uid with
-      | v -> Lwt.return_some v
-      | exception Not_found -> Lwt.return_none
-    in
-    let uid =
-      { Carton.Enc.uid_ln = Uid.length; Carton.Enc.uid_rw = Uid.to_raw_string }
-    in
-    let b =
-      {
-        Carton.Enc.o = Bigstringaf.create De.io_buffer_size;
-        Carton.Enc.i = Bigstringaf.create De.io_buffer_size;
-        Carton.Enc.q = De.Queue.create 0x10000;
-        Carton.Enc.w = De.Lz77.make_window ~bits:15;
-      }
-    in
-    let ctx = ref Uid.empty in
-    let cursor = ref 0 in
-    Carton.Enc.header_of_pack ~length:(Array.length targets) header 0 12;
-    stream (Some (Bigstringaf.to_string header));
-    ctx := Uid.feed !ctx header ~off:0 ~len:12;
-    cursor := !cursor + 12;
-    let encode_targets targets =
-      let encode_target idx =
-        Hashtbl.add offsets (Carton.Enc.target_uid targets.(idx)) !cursor;
-        Carton_lwt.Enc.encode_target ~b ~find ~load:heavy_load ~uid
-          targets.(idx) ~cursor:!cursor
-        >>= fun (len, encoder) ->
-        let rec go encoder =
-          match Carton.Enc.N.encode ~o:b.o encoder with
-          | `Flush (encoder, len) ->
-              let payload = Bigstringaf.substring b.o ~off:0 ~len in
-              stream (Some payload);
-              ctx := Uid.feed !ctx b.o ~off:0 ~len;
-              cursor := !cursor + len;
-              let encoder =
-                Carton.Enc.N.dst encoder b.o 0 (Bigstringaf.length b.o)
-              in
-              go encoder
-          | `End -> Lwt.return ()
-        in
-        let payload = Bigstringaf.substring b.o ~off:0 ~len in
-        stream (Some payload);
-        ctx := Uid.feed !ctx b.o ~off:0 ~len;
-        cursor := !cursor + len;
-        let encoder = Carton.Enc.N.dst encoder b.o 0 (Bigstringaf.length b.o) in
-        go encoder
-      in
-      let rec go idx =
-        if idx < Array.length targets then
-          encode_target idx >>= fun () -> go (succ idx)
-        else Lwt.return ()
-      in
-      go 0
-    in
-    encode_targets targets >>= fun () ->
-    let uid = Uid.get !ctx |> Uid.to_raw_string in
-    stream (Some uid);
-    stream None;
-    Lwt.return_unit
-
-  let pack ~light_load ~heavy_load uids =
-    let open Lwt.Infix in
-    let stream, pusher = Lwt_stream.create () in
-    let fiber () =
-      deltify ~light_load ~heavy_load uids >>= fun (_, targets) ->
-      pack ~heavy_load pusher targets
-    in
-    let stream () = Lwt_stream.get stream in
-    Lwt.async fiber;
-    stream
-
   let push_v1 ?uses_git_transport flow ~capabilities path cmds hostname store
       access push_cfg pack =
     let open Lwt.Infix in
@@ -636,7 +641,7 @@ struct
             in
             push_v1 ~uses_git_transport flow ~capabilities path cmds hostname
               store access push_cfg
-              (pack ~light_load ~heavy_load)
+              (Stream_pack.pack ~light_load ~heavy_load)
         | Ok flow, Some (`HTTP (uri, handshake)), `V1 ->
             let push_cfg = Nss.Push.configuration ~stateless:true () in
             let uri0 =
@@ -648,7 +653,7 @@ struct
             in
             handshake ~uri0 ~uri1 flow >>= fun () ->
             push_v1 flow ~capabilities path cmds hostname store access push_cfg
-              (pack ~light_load ~heavy_load)
+              (Stream_pack.pack ~light_load ~heavy_load)
         | Ok flow, Some _, _ ->
             Log.err (fun m -> m "The protocol version is uninmplemented.");
             Mimic.close flow >>= fun () ->

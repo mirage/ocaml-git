@@ -2,6 +2,7 @@ open Bos
 open Rresult
 open Lwt_backend
 open Store_backend
+module Flow = Unixiz.Make (Mimic)
 
 (** to keep track of directories created by unit tests and clean them up afterwards *)
 module Tmp_dirs = struct
@@ -85,14 +86,23 @@ let git_init_with_branch branch =
     OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % branch)
   else OS.Cmd.run Cmd.(v "git" % "init" % "-b" % branch)
 
-let create_new_git_store _sw =
+let create_new_git_push_store _sw =
   let create () =
-    (* XXX(dinosaure): a hook is already added by [Bos] to delete the
-       directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
     OS.Dir.with_current root git_init_with_branch "master" |> R.join
     >>= fun () ->
-    let access = access lwt in
+    let access =
+      Sigs.
+        {
+          get = get_object_for_packer lwt;
+          parents = (fun _uid _store -> assert false);
+          deref = deref lwt;
+          locals = (fun _store -> assert false);
+          shallowed = (fun _store -> assert false);
+          shallow = (fun _store _uid -> assert false);
+          unshallow = (fun _store _uid -> assert false);
+        }
+    in
     let light_load uid = lightly_load lwt root uid |> Scheduler.prj in
     let heavy_load uid = heavily_load lwt root uid |> Scheduler.prj in
     let store = store_inj { path = root; tbl = Hashtbl.create 0x100 } in
@@ -103,7 +113,9 @@ let create_new_git_store _sw =
   | Error err -> Fmt.failwith "%a" R.pp_msg err
 
 module Git_sync =
-  Smart_git.Make_server (Scheduler) (Append) (Append) (Uid) (Ref)
+  Smart_git.Make_server (Scheduler) (Flow) (Append) (Append) (Uid) (Ref)
+
+module Stream_pack = Smart_git.Make_stream_pack (Uid)
 
 let loopback_endpoint, loopback =
   Mimic.register ~name:"loopback" (module Loopback)
@@ -129,35 +141,33 @@ let test_cancelled_fetch () =
   let run () =
     (* let capabilities = [] in *)
     let payloads = [ "\x30\x30\x30\x30" (* 0000 *) ] in
-    create_new_git_store sw >>= fun (access, store) ->
-    let { path; _ } = store_prj store in
-    let pack, index =
-      ( Fpath.(path / ".git" / "objects" / "pack"),
-        Fpath.(path / ".git" / "objects" / "pack") )
-    in
+    create_new_git_push_store sw
+    >>= fun (((_, light_load, heavy_load) as access'), store) ->
     flow_with_payloads (payloads, ignore) >>? fun flow ->
-    Git_sync.upload_pack ~flow access store pack index
+    let pack = Stream_pack.pack ~light_load ~heavy_load in
+    Git_sync.upload_pack (Flow.make flow) access' store pack >>= fun () ->
+    Lwt.return (Ok ())
   in
   (* TODO: Test that the flow receive the expected response:
      - List of references (head, master) *)
   run () >>= handle_error
 
-let test_fetch_all () =
-  Alcotest_lwt.test_case "fetch all" `Quick @@ fun sw () ->
-  let open Lwt.Infix in
-  let run () =
-    Lwt.return @@ Ok ()
-    (* Client send 0009done *)
-    (* Server should send:
-       - List of refs
-       - pack containing all commits *)
-  in
-  run () >>= handle_error
+(* let test_fetch_all () = *)
+(*   Alcotest_lwt.test_case "fetch all" `Quick @@ fun sw () -> *)
+(*   let open Lwt.Infix in *)
+(*   let run () = *)
+(*     Lwt.return @@ Ok () *)
+(*     (1* Client send 0009done *1) *)
+(*     (1* Server should send: *)
+(*        - List of refs *)
+(*        - pack containing all commits *1) *)
+(*   in *)
+(*   run () >>= handle_error *)
 
 let test =
-  Alcotest_lwt.run "smart" [ "regression", [ test_cancelled_fetch () ] ]
+  Alcotest_lwt.run "server" [ "upload-pack", [ test_cancelled_fetch () ] ]
 
-let tmp = "tmp"
+let tmp = "tmp/server"
 
 let () =
   let fiber =
