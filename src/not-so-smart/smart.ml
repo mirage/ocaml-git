@@ -24,6 +24,7 @@ module Witness = struct
     | Commands : (string, string) Commands.t send
     | Send_pack : { side_band : bool; stateless : bool } -> string send
     | Advertised_refs : (string, string) Advertised_refs.t send
+    | Acks : string Negotiation.t list send
 
   type 'a recv =
     | Advertised_refs : (string, string) Advertised_refs.t recv
@@ -72,6 +73,7 @@ module Value = struct
           encode_pack ~side_band ~stateless encoder v
       | Flush -> encode_flush encoder
       | Advertised_refs -> encode_advertised_refs encoder v
+      | Acks -> encode_acks encoder v
     in
     let rec translate_to_state_t = function
       | Encoder.Done -> State.Return ()
@@ -152,7 +154,8 @@ let recv_pack ?(push_stdout = ignore) ?(push_stderr = ignore) side_band =
 let recv_flush : _ recv = Flush
 let status sideband = Status sideband
 let flush : _ send = Flush
-let ack = Ack
+let recv_ack : _ recv = Ack
+let send_acks : _ send = Acks
 let shallows = Shallows
 
 let send_pack ?(stateless = false) side_band =

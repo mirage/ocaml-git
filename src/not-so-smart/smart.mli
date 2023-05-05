@@ -244,7 +244,8 @@ val recv_pack :
 
 val recv_flush : unit recv
 val recv_commands : (string, string) Commands.t option recv
-val ack : string Negotiation.t recv
+val send_acks : string Negotiation.t list send
+val recv_ack : string Negotiation.t recv
 val shallows : string Shallow.t list recv
 val status : bool -> string Status.t recv
 val packet : trim:bool -> string recv

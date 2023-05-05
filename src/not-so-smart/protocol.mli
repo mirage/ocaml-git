@@ -224,6 +224,9 @@ module Encoder : sig
   val encode_flush : encoder -> error state
   val encode_commands : encoder -> (string, string) Commands.t -> error state
 
+  val encode_acks : encoder -> string Negotiation.t list -> error state
+  (** Sends a list of [ACK]s and terminate with a [NAK]. *)
+
   val encode_advertised_refs :
     encoder -> (string, string) Advertised_refs.t -> error state
 

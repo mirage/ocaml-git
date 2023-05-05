@@ -1227,4 +1227,32 @@ module Encoder = struct
         flush (go buffer (off + len) (max - len)) encoder
     in
     go payload 0 (String.length payload) encoder
+
+  let encode_acks encoder acks =
+    (* TODO: Remove NACK from [Negotiation.t]. *)
+    let write_ack ack encoder =
+      let write_ack uid suffix =
+        write encoder "ACK";
+        write_space encoder;
+        write encoder uid;
+        match suffix with
+        | None -> ()
+        | Some s ->
+            write_space encoder;
+            write encoder s
+      in
+      match ack with
+      | Negotiation.ACK uid -> write_ack uid None
+      | ACK_continue uid -> write_ack uid (Some "continue")
+      | ACK_ready uid -> write_ack uid (Some "ready")
+      | ACK_common uid -> write_ack uid (Some "common")
+      | NAK -> write encoder "NAK"
+    in
+    let rec go acks encoder =
+      match acks with
+      | [] ->
+          delayed_write_pkt (write_ack Negotiation.NAK) (flush kdone) encoder
+      | hd :: tl -> delayed_write_pkt (write_ack hd) (go tl) encoder
+    in
+    go acks encoder
 end
