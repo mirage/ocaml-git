@@ -204,25 +204,21 @@ module Negotiation = struct
     | ACK_continue of 'uid
     | ACK_ready of 'uid
     | ACK_common of 'uid
-    | NAK
 
   let is_common = function ACK_common _ -> true | _ -> false
   let is_ready = function ACK_ready _ -> true | _ -> false
-  let is_nak = function NAK -> true | _ -> false
 
   let pp ppf = function
     | ACK uid -> Fmt.pf ppf "ACK %s" uid
     | ACK_continue uid -> Fmt.pf ppf "ACK %s continue" uid
     | ACK_ready uid -> Fmt.pf ppf "ACK %s ready" uid
     | ACK_common uid -> Fmt.pf ppf "ACK %s common" uid
-    | NAK -> Fmt.pf ppf "NAK"
 
   let map ~f = function
     | ACK uid -> ACK (f uid)
     | ACK_continue uid -> ACK_continue (f uid)
     | ACK_ready uid -> ACK_ready (f uid)
     | ACK_common uid -> ACK_common (f uid)
-    | NAK -> NAK
 end
 
 module Commands = struct
@@ -766,13 +762,13 @@ module Decoder = struct
       let pkt = peek_pkt decoder in
       if String.Sub.equal_bytes pkt v_nak then (
         junk_pkt decoder;
-        return Negotiation.NAK decoder)
+        return `NAK decoder)
       else if String.Sub.is_prefix ~affix:v_ack pkt then
         match String.Sub.cuts ~sep:v_space pkt with
         | [ _; uid ] ->
             let uid = String.Sub.to_string uid in
             junk_pkt decoder;
-            return (Negotiation.ACK uid) decoder
+            return (`ACK (Negotiation.ACK uid)) decoder
         | [ _; uid; v ] -> (
             let uid = String.Sub.to_string uid in
             match
@@ -780,9 +776,9 @@ module Decoder = struct
               junk_pkt decoder;
               v
             with
-            | "continue" -> return (Negotiation.ACK_continue uid) decoder
-            | "ready" -> return (Negotiation.ACK_ready uid) decoder
-            | "common" -> return (Negotiation.ACK_common uid) decoder
+            | "continue" -> return (`ACK (Negotiation.ACK_continue uid)) decoder
+            | "ready" -> return (`ACK (Negotiation.ACK_ready uid)) decoder
+            | "common" -> return (`ACK (Negotiation.ACK_common uid)) decoder
             | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt)))
         | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt))
       else (
@@ -1236,6 +1232,7 @@ module Encoder = struct
 
   let encode_acks encoder acks =
     (* TODO: Remove NACK from [Negotiation.t]. *)
+    let write_nak encoder = write encoder "NAK" in
     let write_ack ack encoder =
       let write_ack uid suffix =
         write encoder "ACK";
@@ -1253,12 +1250,10 @@ module Encoder = struct
       | ACK_continue uid -> write_ack uid (Some "continue")
       | ACK_ready uid -> write_ack uid (Some "ready")
       | ACK_common uid -> write_ack uid (Some "common")
-      | NAK -> write encoder "NAK"
     in
     let rec go acks encoder =
       match acks with
-      | [] ->
-          delayed_write_pkt (write_ack Negotiation.NAK) (flush kdone) encoder
+      | [] -> delayed_write_pkt write_nak (flush kdone) encoder
       | hd :: tl -> delayed_write_pkt (write_ack hd) (go tl) encoder
     in
     go acks encoder

@@ -42,7 +42,7 @@ module Witness = struct
            | `Stdout
            | `Stderr ]
            recv
-    | Ack : string Negotiation.t recv
+    | Ack : [ `ACK of string Negotiation.t | `NAK ] recv
     | Flush : unit recv
     | Shallows : string Shallow.t list recv
     | Want : (string, string) Want.t option recv
