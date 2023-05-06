@@ -51,6 +51,8 @@ module type S = sig
     | `Update of Reference.t * Reference.t ]
     list ->
     (unit, error) result Lwt.t
+
+  val upload_pack : flow:Mimic.flow -> store -> unit Lwt.t
 end
 
 module Make
@@ -294,11 +296,14 @@ struct
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities cmds
 
-  module Flow = Unixiz.Make(Mimic)
+  module Flow = Unixiz.Make (Mimic)
 
-  include Smart_git.Make_server (Scheduler) (Flow) (Pack) (Index) (Hash) (Reference)
+  include
+    Smart_git.Make_server (Scheduler) (Flow) (Pack) (Index) (Hash) (Reference)
 
   let upload_pack ~flow t =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    upload_pack (Flow.make flow) (access, lightly_load t, heavily_load t) ministore
+    upload_pack (Flow.make flow)
+      (access, lightly_load t, heavily_load t)
+      ministore
 end
