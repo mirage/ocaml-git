@@ -681,7 +681,10 @@ module Make_server
     (Uid : UID)
     (Ref : Sigs.REF) =
 struct
+  module Stream_pack = Make_stream_pack (Uid)
   module Upload_pack = Nss.Upload_pack.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
-  let upload_pack = Upload_pack.upload_pack
+  let upload_pack flow (_, light_load, heavy_load as access') store =
+    let pack = Stream_pack.pack ~light_load ~heavy_load in
+    Upload_pack.upload_pack flow access' store pack
 end

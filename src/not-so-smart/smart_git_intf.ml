@@ -187,7 +187,6 @@ module type SMART_GIT = sig
       * Uid.t Carton_lwt.Thin.light_load
       * Uid.t Carton_lwt.Thin.heavy_load ->
       (Uid.t, Uid.t Pck.t, 'a) Sigs.store ->
-      (Uid.t list -> unit -> string option Flow.fiber) ->
       unit Flow.fiber
     (** Answers a [git fetch] *)
 

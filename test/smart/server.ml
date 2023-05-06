@@ -115,8 +115,6 @@ let create_new_git_push_store _sw =
 module Git_sync =
   Smart_git.Make_server (Scheduler) (Flow) (Append) (Append) (Uid) (Ref)
 
-module Stream_pack = Smart_git.Make_stream_pack (Uid)
-
 let loopback_endpoint, loopback =
   Mimic.register ~name:"loopback" (module Loopback)
 
@@ -142,10 +140,9 @@ let test_cancelled_fetch () =
     (* let capabilities = [] in *)
     let payloads = [ "\x30\x30\x30\x30" (* 0000 *) ] in
     create_new_git_push_store sw
-    >>= fun (((_, light_load, heavy_load) as access'), store) ->
+    >>= fun (access, store) ->
     flow_with_payloads (payloads, ignore) >>? fun flow ->
-    let pack = Stream_pack.pack ~light_load ~heavy_load in
-    Git_sync.upload_pack (Flow.make flow) access' store pack >>= fun () ->
+    Git_sync.upload_pack (Flow.make flow) access store >>= fun () ->
     Lwt.return (Ok ())
   in
   (* TODO: Test that the flow receive the expected response:
