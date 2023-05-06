@@ -205,7 +205,10 @@ module Decoder : sig
     ?sideband:bool -> decoder -> (string Status.t, [> error ]) state
 
   val decode_packet : trim:bool -> decoder -> (string, [> error ]) state
-  val decode_want : decoder -> ((string, string) Want.t, [> error ]) state
+
+  val decode_want :
+    decoder -> ((string, string) Want.t option, [> error ]) state
+
   val decode_have : decoder -> (string Have.t, [> error ]) state
 
   val decode_commands :

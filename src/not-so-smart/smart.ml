@@ -45,7 +45,7 @@ module Witness = struct
     | Ack : string Negotiation.t recv
     | Flush : unit recv
     | Shallows : string Shallow.t list recv
-    | Want : (string, string) Want.t recv
+    | Want : (string, string) Want.t option recv
     | Have : string Have.t recv
 end
 

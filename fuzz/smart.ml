@@ -193,7 +193,9 @@ let () =
   let wants = List.map Digestif.SHA1.to_hex wants in
   let v = Smart.Want.v ~capabilities:[] wants in
   let str = to_string v in
-  let res = of_string str in
-  Crowbar.check_eq ~pp:Smart.Want.pp
-    ~eq:(Smart.Want.equal ~uid:String.equal ~reference:String.equal)
-    v res
+  match of_string str with
+  | Some res ->
+      Crowbar.check_eq ~pp:Smart.Want.pp
+        ~eq:(Smart.Want.equal ~uid:String.equal ~reference:String.equal)
+        v res
+  | None -> Crowbar.failf "Invalid empty fetch request (%S)" str

@@ -623,7 +623,9 @@ module Decoder = struct
         let v = peek_pkt decoder in
         if Sub.is_empty v then (
           junk_pkt decoder;
-          return (Want.v ~capabilities (first_want :: List.rev wants)) decoder
+          return
+            (Some (Want.v ~capabilities (first_want :: List.rev wants)))
+            decoder
           (* TODO else if start with shallow or depth request or filter request then *))
         else
           match Sub.cut ~sep:v_space v with
@@ -639,7 +641,8 @@ module Decoder = struct
 
     let decode_first_want decoder =
       let v = peek_pkt decoder in
-      if Sub.is_prefix v ~affix:v_want then (
+      if Sub.is_empty v then return None decoder
+      else if Sub.is_prefix v ~affix:v_want then (
         let v = v |> Sub.with_range ~first:(Sub.length v_want) in
         (* NOTE(dinosaure): we accept more than Git. The BNF syntax of
            [first-want] is:
