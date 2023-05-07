@@ -84,7 +84,9 @@ struct
   end
 
   let upload_pack flow (access, _light_load, _heavy_load) store pack =
-    let my_caps = [ `Multi_ack; `Side_band_64k; `Ofs_delta; `Thin_pack ] in
+    let my_caps =
+      [ `Multi_ack (* ; `Side_band_64k *); `Ofs_delta; `Thin_pack ]
+    in
 
     access.S.locals store |> prj >>= fun refs ->
     let rec go refs acc head_acc =
