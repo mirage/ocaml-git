@@ -97,7 +97,7 @@ let create_new_git_push_store _sw =
           get = get_object_for_packer lwt;
           parents = (fun _uid _store -> assert false);
           deref = deref lwt;
-          locals = (fun _store -> assert false);
+          locals = locals lwt;
           shallowed = (fun _store -> assert false);
           shallow = (fun _store _uid -> assert false);
           unshallow = (fun _store _uid -> assert false);
@@ -139,8 +139,7 @@ let test_cancelled_fetch () =
   let run () =
     (* let capabilities = [] in *)
     let payloads = [ "\x30\x30\x30\x30" (* 0000 *) ] in
-    create_new_git_push_store sw
-    >>= fun (access, store) ->
+    create_new_git_push_store sw >>= fun (access, store) ->
     flow_with_payloads (payloads, ignore) >>? fun flow ->
     Git_sync.upload_pack (Flow.make flow) access store >>= fun () ->
     Lwt.return (Ok ())

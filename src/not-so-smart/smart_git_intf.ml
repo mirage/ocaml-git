@@ -183,7 +183,7 @@ module type SMART_GIT = sig
       (Ref : Sigs.REF) : sig
     val upload_pack :
       Flow.t ->
-      (Uid.t, 'b, Uid.t Pck.t, 'a, Scheduler.t) Sigs.access
+      (Uid.t, Ref.t, Uid.t Pck.t, 'a, Scheduler.t) Sigs.access
       * Uid.t Carton_lwt.Thin.light_load
       * Uid.t Carton_lwt.Thin.heavy_load ->
       (Uid.t, Uid.t Pck.t, 'a) Sigs.store ->

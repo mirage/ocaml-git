@@ -85,9 +85,29 @@ struct
 
   let upload_pack flow (access, _light_load, _heavy_load) store pack =
     let my_caps = [ `Multi_ack; `Side_band_64k; `Ofs_delta; `Thin_pack ] in
+
+    access.S.locals store |> prj >>= fun refs ->
+    let rec go refs acc head_acc =
+      match refs with
+      | [] -> (
+          match head_acc with
+          | None -> return acc
+          | Some head -> return (head :: acc))
+      | ref_ :: q -> (
+          access.deref store ref_ |> prj >>= function
+          | None -> go refs acc head_acc
+          | Some uid -> (
+              let ref_ = Ref.to_string ref_ in
+              let uid = to_hex uid in
+              let entry = uid, ref_, false in
+              match ref_ with
+              | "HEAD" -> go q acc (Some entry)
+              | _ -> go q (entry :: acc) head_acc))
+    in
+    go refs [] None >>= fun refs ->
     let fiber ctx =
       let open Smart in
-      let adv_ref = Advertised_refs.v1 ~capabilities:[] [] (* TODO *) in
+      let adv_ref = Advertised_refs.v1 ~capabilities:my_caps refs in
       let* () = send ctx send_advertised_refs adv_ref in
       recv ctx recv_want
     in

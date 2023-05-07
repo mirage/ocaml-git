@@ -301,6 +301,21 @@ struct
   include
     Smart_git.Make_server (Scheduler) (Flow) (Pack) (Index) (Hash) (Reference)
 
+  let access =
+    Sigs.
+      {
+        get =
+          (fun uid t ->
+            Scheduler.inj (get_object_for_packer (Ministore.prj t) uid));
+        parents = (fun _ _ -> assert false);
+        deref =
+          (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
+        locals = (fun t -> Scheduler.inj (locals (Ministore.prj t)));
+        shallowed = (fun _ -> assert false);
+        shallow = (fun _ -> assert false);
+        unshallow = (fun _ -> assert false);
+      }
+
   let upload_pack ~flow t =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
     upload_pack (Flow.make flow)
