@@ -131,16 +131,20 @@ struct
       match cmd with
       | `Done -> (
           match Server_neg.last_common neg with
-          | Some ack ->
-              let ack = Smart.Negotiation.map ~f:to_hex ack in
-              Smart_flow.run sched fail io flow
-                Smart.(send ctx send_acks [ ack ])
-              |> prj
-              >>= fun () -> return neg
+          | Some _ack ->
+              (* TODO: work out when to send NAKs to follow the protocol... *)
+              (* let ack = Smart.Negotiation.map ~f:to_hex ack in *)
+              (* Smart_flow.run sched fail io flow *)
+              (*   Smart.(send ctx send_acks [ ack ]) *)
+              (* |> prj *)
+              (* >>= fun () -> return neg *)
+              return neg
           | None ->
-              Smart_flow.run sched fail io flow Smart.(send ctx send_acks [])
-              |> prj
-              >>= fun () -> return neg)
+              (* TODO: work out when to send NAKs to follow the protocol... *)
+              (* Smart_flow.run sched fail io flow Smart.(send ctx send_acks []) *)
+              (* |> prj *)
+              (* >>= fun () ->  *)
+              return neg)
       | `Flush -> negotiate neg
     in
     negotiate Server_neg.empty >>= fun neg ->
