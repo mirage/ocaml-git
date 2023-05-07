@@ -1163,7 +1163,8 @@ module Encoder = struct
         write encoder uid;
         write_space encoder;
         write encoder refname;
-        if peeled then write encoder "^{}"
+        if peeled then write encoder "^{}";
+        write_new_line encoder
       in
       let rec go others encoder =
         match others with
@@ -1183,7 +1184,9 @@ module Encoder = struct
       write_zero encoder;
       let rec go = function
         | [] -> ()
-        | [ capability ] -> write encoder (Capability.to_string capability)
+        | [ capability ] ->
+            write encoder (Capability.to_string capability);
+            write_new_line encoder
         | head :: tail ->
             write encoder (Capability.to_string head);
             write_space encoder;
@@ -1238,11 +1241,12 @@ module Encoder = struct
         write encoder "ACK";
         write_space encoder;
         write encoder uid;
-        match suffix with
+        (match suffix with
         | None -> ()
         | Some s ->
             write_space encoder;
-            write encoder s
+            write encoder s);
+        write_new_line encoder
       in
       match ack with
       | Negotiation.ACK uid -> write_ack uid None
