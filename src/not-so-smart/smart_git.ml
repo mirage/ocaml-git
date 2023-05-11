@@ -371,7 +371,7 @@ struct
     let open Lwt.Infix in
     Lwt.try_bind
       (fun () ->
-        Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
+        Fetch.V1.fetch ~uses_git_transport ~push_stdout ~push_stderr
           ~capabilities ?deepen ?want ~host:hostname path (Flow.make flow) store
           access fetch_cfg
         @@ fun (payload, off, len) ->
@@ -403,7 +403,7 @@ struct
     let send t raw =
       let oc = t.oc ^ Cstruct.to_string raw in
       t.oc <- oc;
-      Lwt.return_ok (Cstruct.len raw)
+      Lwt.return_ok (Cstruct.length raw)
 
     let rec recv t raw =
       if t.pos = String.length t.ic then (

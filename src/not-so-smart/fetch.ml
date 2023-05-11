@@ -79,6 +79,7 @@ struct
         List.fold_left fold [] have |> List.split
 
   module V1 = struct
+
     let fetch ?(uses_git_transport = false) ?(push_stdout = ignore)
         ?(push_stderr = ignore) ~capabilities ?deepen ?want:(refs = `None) ~host
         path flow store access fetch_cfg push_pack =
@@ -128,7 +129,7 @@ struct
               Smart.Context.is_cap_shared ctx `Side_band
               || Smart.Context.is_cap_shared ctx `Side_band_64k
             in
-            recv ctx (recv_pack ~side_band ~push_stdout ~push_stderr push_pack)
+            recv ctx (recv_pack ~push_stdout ~push_stderr side_band)
           in
           if res < 0 then Log.warn (fun m -> m "No common commits");
           let rec read_pack () =
@@ -138,7 +139,8 @@ struct
             |> prj
             >>= function
             | `End_of_transmission -> return ()
-            | `Payload (str, off, len) -> pack (str, off, len) >>= read_pack
+            | `Payload (str, off, len) ->
+              push_pack (str, off, len) >>= read_pack
             | `Stdout -> read_pack ()
             | `Stderr -> read_pack ()
           in

@@ -1835,6 +1835,8 @@ module Proto_v2 = struct
     let v t = t
     let equal = String.equal
     let to_string s = s
+    let dir_sep = "/"
+    let segs p = Astring.String.cuts ~sep:dir_sep p
   end
 
   module Flow = Unixiz.Make (Mimic)
