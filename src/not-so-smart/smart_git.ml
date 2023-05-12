@@ -183,6 +183,7 @@ module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
     (Index : APPEND with type +'a fiber = 'a Lwt.t)
+    (HTTP : HTTP)
     (Uid : UID)
     (Ref : Sigs.REF) =
 struct
@@ -366,25 +367,26 @@ struct
     push_pack (Some (v, 0, len))
 
   let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
-      ~capabilities path flow ?deepen ?want hostname store access fetch_cfg pack
-      =
+    ~capabilities path flow ?deepen ?want hostname store access fetch_cfg pack
+    =
     let open Lwt.Infix in
     Lwt.try_bind
       (fun () ->
-        Fetch.V1.fetch ~uses_git_transport ~push_stdout ~push_stderr
-          ~capabilities ?deepen ?want ~host:hostname path (Flow.make flow) store
-          access fetch_cfg
-        @@ fun (payload, off, len) ->
-        let v = String.sub payload off len in
-        pack (Some (v, 0, len)))
+          Fetch.V1.fetch ~uses_git_transport ~push_stdout ~push_stderr
+            ~capabilities ?deepen ?want ~host:hostname path (Flow.make flow) store
+            access fetch_cfg
+          @@ fun (payload, off, len) ->
+          let v = String.sub payload off len in
+          pack (Some (v, 0, len)))
       (fun refs ->
-        pack None >>= fun () ->
-        Mimic.close flow >>= fun () -> Lwt.return_ok refs)
+          pack None >>= fun () ->
+          Mimic.close flow >>= fun () -> Lwt.return_ok refs)
     @@ fun exn ->
     pack None >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.fail exn
 
   module Flow_http = struct
+      
     type +'a fiber = 'a Lwt.t
 
     type t = {
@@ -414,10 +416,11 @@ struct
         t.ic <- t.ic ^ contents;
         recv t raw)
       else
-        let len = min (String.length t.ic - t.pos) (Cstruct.len raw) in
+        let len = min (String.length t.ic - t.pos) (Cstruct.length raw) in
         Cstruct.blit_from_string t.ic t.pos raw 0 len;
         t.pos <- t.pos + len;
         Lwt.return_ok (`Input len)
+          
   end
 
   module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
@@ -442,8 +445,9 @@ struct
       ~host:endpoint path flow store access fetch_cfg
       (push_pack_new_str push_pack)
     >>= fun refs ->
-    push_pack None;
+    push_pack None >>= fun () ->
     Lwt.return_ok refs
+  [@@warning "-32"]
 
   let default_capabilities =
     [
@@ -517,7 +521,7 @@ struct
         Mimic.connect ress >>= fun flow ->
         match flow, get_transmission ress, version with
         | Ok flow, Some (#transmission as transmission), `V1 -> (
-            let fetch_cfg = Nss.Fetch.configuration capabilities in
+            let fetch_cfg = Nss.Fetch.V1.configuration capabilities in
             let uses_git_transport =
               match transmission with `Git -> true | `Exec -> false
             in
@@ -535,7 +539,7 @@ struct
             | Ok _refs, (Error _ as err) -> Lwt.return err)
         | Ok flow, Some (`HTTP (uri, handshake)), `V1 -> (
             let fetch_cfg =
-              Nss.Fetch.configuration ~stateless:true capabilities
+              Nss.Fetch.V1.configuration ~stateless:true capabilities
             in
             let uri0 =
               Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri
