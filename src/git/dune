@@ -2,6 +2,7 @@
  (name git)
  (public_name git)
  (libraries
+  git_paf
   angstrom
   astring
   bigstringaf

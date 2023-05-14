@@ -378,7 +378,7 @@ let test_sync_fetch () =
 
 (* XXX(dinosaure): [tmp] without systemic deletion of directories. *)
 
-module Git_sync = Smart_git.Make (Scheduler) (Append) (Append) (Uid) (Ref)
+module Git_sync = Smart_git.Make (Scheduler) (Append) (Append) (HTTP) (Uid) (Ref)
 
 (* TODO(dinosaure): we don't check what we sent, we should check that. *)
 
