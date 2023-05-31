@@ -123,7 +123,7 @@ module type SMART_GIT = sig
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
       (Pack : APPEND with type +'a fiber = 'a Lwt.t)
       (Index : APPEND with type +'a fiber = 'a Lwt.t)
-      (HTTP : HTTP)
+      (* (HTTP : HTTP) *)
       (Uid : UID)
       (Ref : Sigs.REF) : sig
     val fetch :

@@ -183,7 +183,7 @@ module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
     (Index : APPEND with type +'a fiber = 'a Lwt.t)
-    (HTTP : HTTP)
+    (* (HTTP : HTTP) *)
     (Uid : UID)
     (Ref : Sigs.REF) =
 struct
@@ -362,9 +362,9 @@ struct
 
   (** [push_pack_str_alone push_pack (payload, off, len)] calls [push_pack] with
       [push_pack (Some (String.sub payload off len), 0, len)] *)
-  let push_pack_new_str push_pack (payload, off, len) =
-    let v = String.sub payload off len in
-    push_pack (Some (v, 0, len))
+  (* let push_pack_new_str push_pack (payload, off, len) = *)
+  (*   let v = String.sub payload off len in *)
+  (*   push_pack (Some (v, 0, len)) *)
 
   let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
     ~capabilities path flow ?deepen ?want hostname store access fetch_cfg pack
@@ -385,69 +385,69 @@ struct
     pack None >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.fail exn
 
-  module Flow_http = struct
+  (* module Flow_http = struct *)
       
-    type +'a fiber = 'a Lwt.t
+  (*   type +'a fiber = 'a Lwt.t *)
 
-    type t = {
-      mutable ic : string;
-      mutable oc : string;
-      mutable pos : int;
-      uri : Uri.t;
-      headers : (string * string) list;
-      ctx : Mimic.ctx;
-    }
+  (*   type t = { *)
+  (*     mutable ic : string; *)
+  (*     mutable oc : string; *)
+  (*     mutable pos : int; *)
+  (*     uri : Uri.t; *)
+  (*     headers : (string * string) list; *)
+  (*     ctx : Mimic.ctx; *)
+  (*   } *)
 
-    type error = [ `Msg of string ]
+  (*   type error = [ `Msg of string ] *)
 
-    let pp_error = Rresult.R.pp_msg
+  (*   let pp_error = Rresult.R.pp_msg *)
 
-    let send t raw =
-      let oc = t.oc ^ Cstruct.to_string raw in
-      t.oc <- oc;
-      Lwt.return_ok (Cstruct.length raw)
+  (*   let send t raw = *)
+  (*     let oc = t.oc ^ Cstruct.to_string raw in *)
+  (*     t.oc <- oc; *)
+  (*     Lwt.return_ok (Cstruct.length raw) *)
 
-    let rec recv t raw =
-      if t.pos = String.length t.ic then (
-        let open Lwt.Infix in
-        (HTTP.post ~ctx:t.ctx ~headers:t.headers t.uri t.oc
-        >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)))
-        >>? fun (_resp, contents) ->
-        t.ic <- t.ic ^ contents;
-        recv t raw)
-      else
-        let len = min (String.length t.ic - t.pos) (Cstruct.length raw) in
-        Cstruct.blit_from_string t.ic t.pos raw 0 len;
-        t.pos <- t.pos + len;
-        Lwt.return_ok (`Input len)
+  (*   let rec recv t raw = *)
+  (*     if t.pos = String.length t.ic then ( *)
+  (*       let open Lwt.Infix in *)
+  (*       (HTTP.post ~ctx:t.ctx ~headers:t.headers t.uri t.oc *)
+  (*       >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error))) *)
+  (*       >>? fun (_resp, contents) -> *)
+  (*       t.ic <- t.ic ^ contents; *)
+  (*       recv t raw) *)
+  (*     else *)
+  (*       let len = min (String.length t.ic - t.pos) (Cstruct.length raw) in *)
+  (*       Cstruct.blit_from_string t.ic t.pos raw 0 len; *)
+  (*       t.pos <- t.pos + len; *)
+  (*       Lwt.return_ok (`Input len) *)
           
-  end
+  (* end *)
 
-  module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
-  module Fetch_v1_http = Fetch_http.V1
+  (* module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref) *)
+  (* module Fetch_v1_http = Fetch_http.V1 *)
 
-  let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
-      ?(headers = []) endpoint path ?deepen ?want store access fetch_cfg
-      push_pack =
-    let open Rresult in
-    let open Lwt.Infix in
-    let uri0 = Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri in
-    let uri0 = Uri.of_string uri0 in
-    Log.debug (fun m -> m "GET %a" Uri.pp uri0);
-    HTTP.get ~ctx ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
-    >>? fun (_resp, contents) ->
-    let uri1 = Fmt.str "%a/git-upload-pack" Uri.pp uri in
-    let uri1 = Uri.of_string uri1 in
-    let flow =
-      { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx }
-    in
-    Fetch_v1_http.fetch ~push_stdout ~push_stderr ~capabilities ?deepen ?want
-      ~host:endpoint path flow store access fetch_cfg
-      (push_pack_new_str push_pack)
-    >>= fun refs ->
-    push_pack None >>= fun () ->
-    Lwt.return_ok refs
-  [@@warning "-32"]
+  (* let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri *)
+  (*     ?(headers = []) endpoint path ?deepen ?want store access fetch_cfg *)
+  (*     push_pack = *)
+  (*   let open Rresult in *)
+  (*   let open Lwt.Infix in *)
+  (*   let uri0 = Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri in *)
+  (*   let uri0 = Uri.of_string uri0 in *)
+  (*   Log.debug (fun m -> m "GET %a" Uri.pp uri0); *)
+  (*   HTTP.get ~ctx ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error) *)
+  (*   >>? fun (_resp, contents) -> *)
+  (*   let uri1 = Fmt.str "%a/git-upload-pack" Uri.pp uri in *)
+  (*   let uri1 = Uri.of_string uri1 in *)
+  (*   let flow = *)
+  (*     { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx } *)
+  (*   in *)
+  (*   Fetch_v1_http.fetch ~push_stdout ~push_stderr ~capabilities ?deepen ?want *)
+  (*     ~host:endpoint path flow store access fetch_cfg *)
+  (*     (push_pack_new_str push_pack) *)
+  (*   >>= fun refs -> *)
+  (*   push_pack None >>= fun () -> *)
+  (*   Lwt.return_ok refs *)
+  (* [@@warning "-32"] *)
 
   let default_capabilities =
     [

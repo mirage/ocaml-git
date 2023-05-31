@@ -181,9 +181,9 @@ struct
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
-  module Http = Git_paf
+  (* module Http = Git_paf *)
   
-  include Smart_git.Make (Scheduler) (Pack) (Index) (Http) (Hash) (Reference)
+  include Smart_git.Make (Scheduler) (Pack) (Index) (Hash) (Reference)
 
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
