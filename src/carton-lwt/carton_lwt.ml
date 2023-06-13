@@ -167,10 +167,10 @@ module Enc = struct
   let header_of_pack ~length buf off len =
     Carton.Enc.header_of_pack ~length buf off len
 
-  let encode_target ~b ~find ~load ~uid target ~cursor =
+  let encode_target ?level ~b ~find ~load ~uid target ~cursor =
     let load uid = inj (load uid) in
     let find uid = inj (find uid) in
-    prj (Carton.Enc.encode_target lwt ~b ~find ~load ~uid target ~cursor)
+    prj (Carton.Enc.encode_target lwt ?level ~b ~find ~load ~uid target ~cursor)
 end
 
 module Thin = struct
