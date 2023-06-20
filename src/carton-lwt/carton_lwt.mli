@@ -239,6 +239,7 @@ module Enc : sig
   val header_of_pack : length:int -> Bigstringaf.t -> int -> int -> unit
 
   val encode_target :
+    ?level:int ->
     b:b ->
     find:'uid find ->
     load:'uid load ->
