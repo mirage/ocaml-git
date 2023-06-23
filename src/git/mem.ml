@@ -39,15 +39,18 @@ let batch_write :
     uid_ln:int ->
     uid_rw:(string -> uid) ->
     map:(pack -> pos:int64 -> int -> Bigstringaf.t) ->
-    iter:(index -> f:(uid -> int64 -> unit) -> unit) ->
+    iter:(index -> f:(uid -> int64 -> unit Lwt.t) -> unit Lwt.t) ->
     pack ->
     index ->
-    unit =
+    unit Lwt.t =
  fun store ~uid_ln ~uid_rw ~map ~iter pack index ->
   let tbl = Hashtbl.create 0x100 in
-  let f uid offset = Hashtbl.add tbl uid offset in
-  iter index ~f;
-
+  let f uid offset =
+    Hashtbl.add tbl uid offset;
+    Lwt.return_unit
+  in
+  let open Lwt.Infix in
+  iter index ~f >>= fun () ->
   let z = De.bigstring_create De.io_buffer_size in
   let w = De.make_window ~bits:15 in
   let allocate _ = w in
@@ -72,7 +75,8 @@ let batch_write :
       | `D -> `Tag
     in
     if not (Hashtbl.mem store.values uid) then
-      Hashtbl.add store.inflated uid (kind, inflated)
+      Hashtbl.add store.inflated uid (kind, inflated);
+    Lwt.return_unit
   in
   iter index ~f
 
@@ -325,8 +329,9 @@ module Make (Digestif : Digestif.S) = struct
         ~uid_wr:Hash.of_raw_string
     in
     let iter index ~f =
-      let f ~uid ~offset ~crc:_ = f uid offset in
-      Carton.Dec.Idx.iter ~f index
+      let f (uid, offset) = f uid offset in
+      let f ~uid ~offset ~crc:_ = Lwt.apply f (uid, offset) in
+      Carton.Dec.Idx.map ~f index |> Lwt.join
     in
     let map pck_contents ~pos len =
       let pos = Int64.to_int pos in
@@ -334,8 +339,8 @@ module Make (Digestif : Digestif.S) = struct
       Bigstringaf.of_string ~off:pos ~len pck_contents
     in
     batch_write t ~uid_ln:Hash.length ~uid_rw:Hash.of_raw_string ~map ~iter
-      pck_contents index;
-    Lwt.return_ok ()
+      pck_contents index
+    >>= fun () -> Lwt.return_ok ()
 
   module Ref = struct
     module Graph = Reference.Map

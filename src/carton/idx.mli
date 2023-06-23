@@ -16,6 +16,9 @@ val find : 'uid idx -> 'uid -> (optint * int64) option
 val iter :
   f:(uid:'uid -> offset:int64 -> crc:optint -> unit) -> 'uid idx -> unit
 
+val map :
+  f:(uid:'uid -> offset:int64 -> crc:optint -> 'a) -> 'uid idx -> 'a list
+
 val exists : 'uid idx -> 'uid -> bool
 val max : 'uid idx -> int
 val get_uid : 'uid idx -> int -> 'uid
