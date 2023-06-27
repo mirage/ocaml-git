@@ -277,7 +277,7 @@ let empty_index, uid_empty_index =
   let res =
     let open Rresult in
     Bos.OS.Dir.current () >>= fun current ->
-    let dst = Fpath.(current / "index-null") in
+    let dst = Fpath.(current / "index-null.idx") in
     ( Bos.OS.Dir.with_tmp "git-%s" @@ fun path ->
       Bos.OS.Dir.with_current path @@ fun () ->
       Bos.OS.Cmd.run_status Bos.Cmd.(v "git" % "init") >>= fun _ ->
@@ -299,7 +299,7 @@ let empty_index, uid_empty_index =
     | Ok () -> ()
     | Error (`Msg err) -> Alcotest.fail err
   in
-  let ic = open_in_bin "index-null" in
+  let ic = open_in_bin "index-null.idx" in
   let ln = in_channel_length ic in
   let rs = Bytes.create ln in
   really_input ic rs 0 ln;
