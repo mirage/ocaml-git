@@ -16,7 +16,7 @@ let sha1 = impl ~packages:[ package "digestif" ] "Digestif.SHA1" hash
 let git = typ Git
 
 let git_impl path =
-  let packages = [ package "git" ~min:"3.9.0" ~max:"3.10.0" ] in
+  let packages = [ package "git" ] in (* no bounds here, the git_client from mirage already emits bounds *)
   let keys = match path with
     | None -> []
     | Some path -> [ Key.v path ] in
@@ -40,6 +40,8 @@ let git_impl path =
 
 let minigit =
   foreign "Unikernel.Make"
+    ~packages:[ package "ptime"
+              ; package "hxd" ~sublibs:[ "core"; "string" ] ]
     ~keys:[ Key.v remote
           ; Key.v port ]
     (console @-> stackv4v6 @-> git @-> git_client @-> job)
@@ -74,6 +76,5 @@ let console = default_console
 let git     = git None sha1
 
 let () =
-  register "minigit" ~packages:[ package "ptime"
-                               ; package "hxd" ~sublibs:[ "core"; "string" ] ]
+  register "minigit"
     [ minigit $ console $ stack $ git $ git_client ]
