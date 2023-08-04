@@ -4,7 +4,6 @@ open Lwt.Infix
 let ( >>? ) = Lwt_result.bind
 
 module Make
-    (Console : Mirage_console.S)
     (Stack : Tcpip.Stack.V4V6)
     (Store : Git.S)
     (_ : sig end) =
@@ -178,25 +177,23 @@ struct
     let queue = Ke.Rke.create ~capacity:0x1000 Bigarray.char in
     go queue flow
 
-  let log console fmt = Format.kasprintf (Console.log console) fmt
-
-  let callback console edn ctx git branch flow =
+  let callback edn ctx git branch flow =
     let ipaddr, port = Stack.TCP.dst flow in
     callback edn ctx git branch flow >>= function
     | Ok () -> Lwt.return_unit
     | Error (`Msg err) ->
-      Stack.TCP.close flow >>= fun () ->
-      log console "Got an error from %a:%d: %s." Ipaddr.pp ipaddr port err
+      Stack.TCP.close flow >|= fun () ->
+      Logs.app (fun m -> m "Got an error from %a:%d: %s." Ipaddr.pp ipaddr port err)
 
-  let server console stack edn ctx git branch =
-    Stack.TCP.listen (Stack.tcp stack) ~port:(Key_gen.port ()) (callback console edn ctx git branch) ;
+  let server stack edn ctx git branch =
+    Stack.TCP.listen (Stack.tcp stack) ~port:(Key_gen.port ()) (callback edn ctx git branch) ;
     Stack.listen stack
 
   let failwith pp = function
     | Ok _ as v -> Lwt.return v
     | Error err -> Fmt.failwith "%a" pp err
 
-  let start console stack git ctx =
+  let start stack git ctx =
     let edn, branch = match String.split_on_char '#' (Key_gen.remote ()) with
       | [ edn; branch ] ->
         Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string edn),
@@ -205,5 +202,5 @@ struct
         Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string (Key_gen.remote ())),
         Git.Reference.master in
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All
-    >>= failwith Sync.pp_error >>= fun _ -> server console stack edn ctx git branch
+    >>= failwith Sync.pp_error >>= fun _ -> server stack edn ctx git branch
 end

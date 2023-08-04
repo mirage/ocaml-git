@@ -44,7 +44,7 @@ let minigit =
               ; package "hxd" ~sublibs:[ "core"; "string" ] ]
     ~keys:[ Key.v remote
           ; Key.v port ]
-    (console @-> stackv4v6 @-> git @-> git_client @-> job)
+    (stackv4v6 @-> git @-> git_client @-> job)
 
 let git path hash = git_impl path $ hash
 
@@ -72,9 +72,8 @@ let git_client =
     (merge_git_clients (git_ssh ~key:ssh_key ~authenticator:ssh_authenticator tcp git)
       (git_http ~authenticator:https_authenticator tcp git))
 
-let console = default_console
 let git     = git None sha1
 
 let () =
   register "minigit"
-    [ minigit $ console $ stack $ git $ git_client ]
+    [ minigit $ stack $ git $ git_client ]
