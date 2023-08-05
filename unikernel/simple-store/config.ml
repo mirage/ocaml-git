@@ -54,6 +54,10 @@ let ssh_key =
   let doc = Key.Arg.info ~doc:"The private SSH key." [ "ssh-key" ] in
   Key.(create "ssh_seed" Arg.(opt (some string) None doc))
 
+let ssh_password =
+  let doc = Key.Arg.info ~doc:"The private SSH password." [ "ssh-password" ] in
+  Key.(create "ssh_password" Arg.(opt (some string) None doc))
+
 let ssh_authenticator =
   let doc = Key.Arg.info ~doc:"SSH public key of the remote Git repository." [ "ssh-authenticator" ] in
   Key.(create "ssh_authenticator" Arg.(opt (some string) None doc))
@@ -66,10 +70,10 @@ let stack = generic_stackv4v6 default_network
 
 let git_client =
   let dns = generic_dns_client stack in
-  let git = git_happy_eyeballs stack dns (generic_happy_eyeballs stack dns) in
+  let git = mimic_happy_eyeballs stack dns (generic_happy_eyeballs stack dns) in
   let tcp = tcpv4v6_of_stackv4v6 stack in
   merge_git_clients (git_tcp tcp git)
-    (merge_git_clients (git_ssh ~key:ssh_key ~authenticator:ssh_authenticator tcp git)
+    (merge_git_clients (git_ssh ~key:ssh_key ~password:ssh_password ~authenticator:ssh_authenticator tcp git)
       (git_http ~authenticator:https_authenticator tcp git))
 
 let git     = git None sha1
