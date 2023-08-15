@@ -263,6 +263,7 @@ let author () =
          match Ptime_clock.current_tz_offset_s () with
          | Some s ->
              let sign = if s < 0 then `Minus else `Plus in
+             let s = abs s in
              let hours = s / 3600 in
              let minutes = s mod 3600 / 60 in
              Some { Git.User.sign; hours; minutes }
