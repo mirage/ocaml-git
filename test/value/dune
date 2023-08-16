@@ -1,0 +1,11 @@
+(executable
+ (name test)
+ (libraries rresult digestif.c fmt git alcotest))
+
+(rule
+ (alias runtest)
+ (package git)
+ (deps
+  (:test test.exe))
+ (action
+  (run %{test} --color=always)))
