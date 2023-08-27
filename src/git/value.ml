@@ -46,6 +46,7 @@ module type S = sig
   include S.BASE with type t := t
 
   val length : t -> int64
+  val length_with_header : t -> int64
   val to_raw : t -> string
   val to_raw_without_header : t -> string
 
@@ -185,6 +186,17 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
     | Tree tree -> Tree.length tree
     | Blob blob -> Blob.length blob
 
+  let length_with_header t =
+    let ( + ) = Int64.add in
+    let length = length t in
+    let kind_length =
+      match t with Commit _ -> 6L | Tree _ -> 4L | Blob _ -> 4L | Tag _ -> 3L
+    in
+    let length_length =
+      Int64.to_string length |> String.length |> Int64.of_int
+    in
+    kind_length + 1L (* ' ' *) + length_length + 1L (* '\000' *) + length
+
   let digest = function
     | Blob blob -> Blob.digest blob
     | Commit commit -> Commit.digest commit
@@ -271,23 +283,25 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
 
     let fiber =
       cut ~sep:(v " ") sub >>= fun (kind, rest) ->
-      cut ~sep:(v "\000") rest >>= fun (_length, rest) ->
+      cut ~sep:(v "\000") rest >>= fun (length, rest) ->
+      let length = to_string length |> Int64.of_string |> Int64.to_int in
+      let rest = with_range ~len:length rest |> to_string in
       match to_string kind with
       | "commit" ->
           let decoder = Encore.to_angstrom Commit.format in
           Stdlib.Result.to_option
-            (Angstrom.parse_string ~consume:All decoder (to_string rest))
+            (Angstrom.parse_string ~consume:All decoder rest)
           >>| commit
       | "tree" ->
           let decoder = Encore.to_angstrom Tree.format in
           Stdlib.Result.to_option
-            (Angstrom.parse_string ~consume:All decoder (to_string rest))
+            (Angstrom.parse_string ~consume:All decoder rest)
           >>| tree
-      | "blob" -> Some (Blob (Blob.of_string (to_string rest)))
+      | "blob" -> Some (Blob (Blob.of_string rest))
       | "tag" ->
           let decoder = Encore.to_angstrom Tag.format in
           Stdlib.Result.to_option
-            (Angstrom.parse_string ~consume:All decoder (to_string rest))
+            (Angstrom.parse_string ~consume:All decoder rest)
           >>| tag
       | _ -> None
     in

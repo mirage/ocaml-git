@@ -48,6 +48,10 @@ module type S = sig
   include S.BASE with type t := t
 
   val length : t -> int64
+
+  val length_with_header : t -> int64
+  (** [length_with_header t] is [length t] plus the length of the header. *)
+
   val to_raw : t -> string
   val to_raw_without_header : t -> string
 
