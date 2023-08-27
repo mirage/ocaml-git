@@ -136,8 +136,8 @@ module Search :
   let open Lwt_result.Syntax in
   (* get store located in current root's .git folder *)
   let* store = Store.v (Fpath.v (Sys.getcwd ())) in
-  (* find obj-id pointed at by master branch (reference) *)
-  let* commit_id = Store.Ref.resolve store Git.Reference.master in
+  (* find obj-id pointed at by main branch (reference) *)
+  let* commit_id = Store.Ref.resolve store Git.Reference.main in
   let open Lwt.Syntax in
   (* find obj-id of of [filename] as a git blob *)
   let* blob_id = Search.find store commit_id (`Commit (`Path [ filename ])) in
