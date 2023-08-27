@@ -212,6 +212,17 @@ let iter ~f idx =
   in
   go 0
 
+let map ~f idx =
+  let rec go acc n =
+    if n == idx.n then List.rev acc
+    else
+      let uid = get_uid idx n in
+      let offset = get_offset idx n in
+      let crc = get_crc idx n in
+      go (f ~uid ~offset ~crc :: acc) (succ n)
+  in
+  go [] 0
+
 module type UID = sig
   type t
   type ctx
