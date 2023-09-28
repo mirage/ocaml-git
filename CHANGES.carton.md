@@ -1,3 +1,8 @@
+### 0.7.0 (2023-09-28) Paris - France
+
+- Extend the API with the ability to choose the compression level (@dinosaure, #616)
+- Extend the API about `*.idx` file and be able to map entries (@dinosaure, #619)
+
 ### 0.6.0 (2022-10-19) Paris - France
 
 - Add few functions to introspect target when we encode and be able to construct objects with source
