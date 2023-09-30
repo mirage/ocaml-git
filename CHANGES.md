@@ -2,6 +2,7 @@
 
 - Fix tests with `git.2.41.0+` (@metanivek, #622)
 - Fix raw parsing in the middle of the buffer (@metanivek, #623)
+- Be more cooperative when we `batch_write` (@dinosaure, #619)
 
 ### 3.13.0 (2023-03-24) Paris - France
 
