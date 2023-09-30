@@ -1,3 +1,8 @@
+### 3.14.0 (2023-09-30) Paris - France
+
+- Fix tests with `git.2.41.0+` (@metanivek, #622)
+- Fix raw parsing in the middle of the buffer (@metanivek, #623)
+
 ### 3.13.0 (2023-03-24) Paris - France
 
 - Update tests with `mirage-crypto-rng` (@Zimmi48, #612)
