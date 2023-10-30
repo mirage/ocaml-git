@@ -12,7 +12,7 @@ let sha1 = impl ~packages:[ package "digestif" ] "Digestif.SHA1" hash
 let git = typ Git
 
 let git_impl path =
-  let packages = [ package "git" ~min:"3.9.0" ~max:"3.10.0" ] in
+  let packages = [ package "git" ] in (* no bounds here, the git_client from mirage already emits bounds *)
   let keys = match path with
     | None -> []
     | Some path -> [ Key.v path ] in
@@ -36,6 +36,7 @@ let git_impl path =
 
 let minigit =
   foreign "Unikernel.Make"
+    ~packages:[ package "ptime" ]
     ~keys:[ Key.v remote ]
     (git @-> git_client @-> job)
 
@@ -46,6 +47,10 @@ let git path hash = git_impl path $ hash
 let ssh_key =
   let doc = Key.Arg.info ~doc:"The private SSH key." [ "ssh-key" ] in
   Key.(create "ssh_seed" Arg.(opt (some string) None doc))
+
+let ssh_password =
+  let doc = Key.Arg.info ~doc:"The private SSH password." [ "ssh-password" ] in
+  Key.(create "ssh_password" Arg.(opt (some string) None doc))
 
 let ssh_authenticator =
   let doc = Key.Arg.info ~doc:"SSH public key of the remote Git repository." [ "ssh-authenticator" ] in
@@ -59,14 +64,13 @@ let stack = generic_stackv4v6 default_network
 
 let git_client =
   let dns = generic_dns_client stack in
-  let git = git_happy_eyeballs stack dns (generic_happy_eyeballs stack dns) in
+  let git = mimic_happy_eyeballs stack dns (generic_happy_eyeballs stack dns) in
   let tcp = tcpv4v6_of_stackv4v6 stack in
   merge_git_clients (git_tcp tcp git)
-    (merge_git_clients (git_ssh ~key:ssh_key ~authenticator:ssh_authenticator tcp git)
+    (merge_git_clients (git_ssh ~key:ssh_key ~password:ssh_password ~authenticator:ssh_authenticator tcp git)
       (git_http ~authenticator:https_authenticator tcp git))
 
 let git    = git None sha1
 
 let () =
-  register "minigit" ~packages:[ package "ptime" ]
-    [ minigit $ git $ git_client ]
+  register "minigit" [ minigit $ git $ git_client ]
