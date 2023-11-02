@@ -146,7 +146,7 @@ module Shallow : sig
   val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
-type ('a, 'err) t =
+type ('a, 'err) t = ('a, 'err) State.t =
   | Read of {
       buffer : bytes;
       off : int;

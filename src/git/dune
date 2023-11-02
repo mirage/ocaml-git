@@ -2,34 +2,37 @@
  (name git)
  (public_name git)
  (libraries
-  hxd.core
-  hxd.string
-  mimic
-  rresult
-  git.nss.sigs
-  git.nss.pck
-  optint
-  loose
-  decompress.de
-  decompress.zl
-  result
-  git.nss.smart
-  logs
-  lwt
-  cstruct
+  git_paf
   angstrom
+  astring
   bigstringaf
   carton
-  ke
-  fmt
+  carton-git
+  carton-lwt
   checkseum
+  cstruct
+  decompress.de
+  decompress.zl
+  digestif
+  encore
+  fmt
+  fpath
+  git.nss.capability
   git.nss.git
   git.nss.hkt
-  ocamlgraph
-  astring
-  fpath
+  git.nss.pck
+  git.nss.sigs
+  git.nss.smart
+  hxd.core
+  hxd.string
+  ke
+  logs
+  loose
   loose_git
-  carton-lwt
-  carton-git
-  digestif
-  encore))
+  lwt
+  mimic
+  ocamlgraph
+  optint
+  result
+  rresult
+))

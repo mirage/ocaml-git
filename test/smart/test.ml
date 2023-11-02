@@ -1,3 +1,4 @@
+open Astring
 open Bos
 open Rresult
 open Lwt_backend
@@ -1140,7 +1141,7 @@ let test_negotiation () =
 
 let ( <.> ) f g x = f (g x)
 
-let run_git_upload_pack ?(tmps_exit = true) store ic oc =
+let run_git_upload_pack ?(git_proto_v = 1) ?(tmps_exit = true) store ic oc =
   let { path; _ } = store_prj store in
   let process =
     OS.Dir.with_current path @@ fun () ->
@@ -1149,7 +1150,13 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
     let git_upload_pack = Cmd.(v "git-upload-pack" % Fpath.to_string path) in
     let pipe () =
       OS.Cmd.run_out cat |> OS.Cmd.out_run_in >>= fun cat ->
-      OS.Cmd.run_io git_upload_pack cat |> OS.Cmd.out_run_in >>= fun git ->
+      let env =
+        match git_proto_v with
+        | 1 -> String.Map.empty
+        | 2 -> String.Map.singleton "GIT_PROTOCOL" "version=2"
+        | _ -> assert false
+      in
+      OS.Cmd.run_io ~env git_upload_pack cat |> OS.Cmd.out_run_in >>= fun git ->
       OS.Cmd.run_in tee git
     in
     match Unix.fork () with
@@ -1811,6 +1818,164 @@ let update_testzone_1 store =
   | Ok () -> Lwt.return_ok ()
   | Error err -> Lwt.return_error err
 
+module Proto_v2 = struct
+  module Scheduler = Hkt.Make_sched (Lwt)
+
+  module Uid = struct
+    type t = string
+
+    let of_hex v = v
+    let to_hex v = v
+    let compare = String.compare
+  end
+
+  module Ref = struct
+    type t = string
+
+    let v t = t
+    let equal = String.equal
+    let to_string s = s
+    let dir_sep = "/"
+    let segs p = Astring.String.cuts ~sep:dir_sep p
+  end
+
+  module Flow = Unixiz.Make (Mimic)
+  module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
+
+  let ( let*! ) x f = x >>? f
+
+  let test_get_server_capabilities =
+    Alcotest_lwt.test_case "can connect and get server capabilities" `Quick
+    @@ fun sw () ->
+    let open Lwt.Syntax in
+    let* _access, store = create_new_git_store sw in
+    let { path; _ } = store_prj store in
+    let cwd = Fpath.to_string path in
+    let ctx =
+      ctx_with_pipe ~cwd
+        ~env:[| "GIT_PROTOCOL=version=2" |]
+        ~args:[| "git-upload-pack"; cwd |]
+        ""
+    in
+    let* flow = Mimic.resolve ctx in
+    match flow with
+    | Error e ->
+        Fmt.failwith "couldn't resolve flow; mimic error %a" Mimic.pp_error e
+    | Ok flow ->
+        let flow = Flow.make flow in
+        let host =
+          Domain_name.of_string_exn "localhost" |> Domain_name.host |> R.get_ok
+        in
+        let path = "not-found.git" in
+        let proto_ctx = Wire_proto_v2.Context.make ~client_caps:[] in
+        let* capabilities =
+          Fetch.V2.get_server_capabilities ~uses_git_transport:false ~host ~path
+            proto_ctx flow
+        in
+        Alcotest.(check bool)
+          "capability list is not empty"
+          (List.length capabilities > 0)
+          true;
+        Lwt.return ()
+
+  let test_ls_refs_request =
+    Alcotest_lwt.test_case
+      "can successfully run ls-refs command with no refs in store" `Quick
+    @@ fun sw () ->
+    let open Lwt.Syntax in
+    let* _access, store = create_new_git_store sw in
+    let { path; _ } = store_prj store in
+    let cwd = Fpath.to_string path in
+    let ctx =
+      ctx_with_pipe ~cwd
+        ~env:[| "GIT_PROTOCOL=version=2" |]
+        ~args:[| "git-upload-pack"; cwd |]
+        ""
+    in
+    let* flow = Mimic.resolve ctx in
+    match flow with
+    | Error e ->
+        Fmt.failwith "couldn't resolve flow; mimic error %a" Mimic.pp_error e
+    | Ok flow ->
+        let flow = Flow.make flow in
+        let host =
+          Domain_name.of_string_exn "localhost" |> Domain_name.host |> R.get_ok
+        in
+        let path = "not-found.git" in
+        let proto_ctx = Wire_proto_v2.Context.make ~client_caps:[] in
+        let* ref_list =
+          let request =
+            Wire_proto_v2.Proto_vals_v2.Ls_refs.make_request ~symrefs:false
+              ~peel:false []
+          in
+          Fetch.V2.ls_refs_request ~uses_git_transport:false ~host ~path
+            proto_ctx flow request
+        in
+        Alcotest.(check bool)
+          "capability list is empty"
+          (List.length ref_list = 0)
+          true;
+        Lwt.return ()
+
+  let test_ls_refs_request_has_refs =
+    Alcotest_lwt.test_case
+      "can successfully run ls-refs command with a ref in store" `Quick
+    @@ fun sw () ->
+    let open Lwt.Syntax in
+    let* _access, store = create_new_git_store sw in
+    let { path; _ } = store_prj store in
+    match
+      let open Rresult in
+      OS.Dir.with_current path
+        (fun () ->
+          OS.Cmd.run Cmd.(v "touch" % "empty") >>= fun () ->
+          OS.Cmd.run Cmd.(v "git" % "add" % "empty") >>= fun () ->
+          OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % "empty"))
+        ()
+      |> Rresult.R.join
+    with
+    | Ok () -> (
+        let cwd = Fpath.to_string path in
+        let ctx =
+          ctx_with_pipe ~cwd
+            ~env:[| "GIT_PROTOCOL=version=2" |]
+            ~args:[| "git-upload-pack"; cwd |]
+            ""
+        in
+        let* flow = Mimic.resolve ctx in
+        match flow with
+        | Error e ->
+            Fmt.failwith "couldn't resolve flow; mimic error %a" Mimic.pp_error
+              e
+        | Ok flow ->
+            let flow = Flow.make flow in
+            let host =
+              Domain_name.of_string_exn "localhost"
+              |> Domain_name.host
+              |> R.get_ok
+            in
+            let path = "not-found.git" in
+            let proto_ctx = Wire_proto_v2.Context.make ~client_caps:[] in
+            let* ref_list =
+              let request =
+                Wire_proto_v2.Proto_vals_v2.Ls_refs.make_request ~symrefs:false
+                  ~peel:false []
+              in
+              Fetch.V2.ls_refs_request ~uses_git_transport:false ~host ~path
+                proto_ctx flow request
+            in
+            List.iter
+              (fun ({ name; _ } : Wire_proto_v2.Proto_vals_v2.Ls_refs.ref_) ->
+                print_endline name)
+              ref_list;
+            Alcotest.(check bool)
+              "capability list is not empty"
+              (List.length ref_list > 0)
+              true;
+            Lwt.return ())
+    | Error _ as e -> R.error_msg_to_invalid_arg e
+end
+
 let test =
   Alcotest_lwt.run "smart"
     [
@@ -1832,6 +1997,12 @@ let test =
           test_push_empty ();
           test_push_capabilities ();
         ] );
+      ( "protocol-v2",
+        Proto_v2.
+          [
+            test_get_server_capabilities; test_ls_refs_request;
+            test_ls_refs_request_has_refs;
+          ] );
     ]
 
 let tmp = "tmp"

@@ -1,3 +1,6 @@
+module Log = (val let src = Logs.Src.create "nss/decoder" in
+                  Logs.src_log src : Logs.LOG)
+
 type decoder = { buffer : Bytes.t; mutable pos : int; mutable max : int }
 
 let io_buffer_size = 65536
@@ -266,10 +269,61 @@ let peek_pkt decoder =
   if len >= 4 then decoder.buffer, decoder.pos + 4, len - 4
   else decoder.buffer, decoder.pos + 4, 0
 
+type pkt =
+  | Flush_pkt  (** length in hex 0000 *)
+  | Delim_pkt  (** 0001 *)
+  | Response_end_pkt  (** 0002 *)
+  | Invalid_len_pkt of int  (** 0003 or 0004 *)
+  | Pkt of (int * string)
+      (** e.g., 0008done is represented as (8, "done");
+        we want to keep length to avoid calling [pkt_len_unsafe] several times;
+        we can't do [String.length str] + 4 because there may be LF, which is trimmed away,
+        so we should rely on the length encoded in the pkt *)
+
+let peek_pkt' ?(trim = true) ({ buffer; pos; _ } as decoder) =
+  match pkt_len_unsafe decoder with
+  | 0 -> Flush_pkt
+  | 1 -> Delim_pkt
+  | 2 -> Response_end_pkt
+  | (3 | 4) as i -> Invalid_len_pkt i
+  | i when i < 0 -> Invalid_len_pkt i
+  | pkt_len ->
+      let pkt_content_len = pkt_len - 4 in
+      let pkt_content (* pkt excluding 1st 4 bytes, ie pkt len *) =
+        Bytes.create pkt_content_len
+      in
+      Bytes.blit buffer (pos + 4) pkt_content 0 pkt_content_len;
+      let pkt_content = if trim then Bytes.trim pkt_content else pkt_content in
+      Pkt (pkt_len, Bytes.to_string pkt_content)
+  | exception Invalid_argument s ->
+      Fmt.failwith
+        "peek_pkt: decoder.buffer didn't contain 4 'length' bytes: %s" s
+
+let encoded_pkt_len = function
+  | Flush_pkt -> 0
+  | Delim_pkt -> 1
+  | Response_end_pkt -> 2
+  | Invalid_len_pkt i -> i
+  | Pkt (l, _) -> l
+
+let pkt_len_at_least_4 pkt = max 4 (encoded_pkt_len pkt)
+
+let read_pkt ?(trim = true) ({ pos; _ } as decoder) =
+  let pkt = peek_pkt' ~trim decoder in
+  let advance_n_bytes = pkt_len_at_least_4 pkt in
+  decoder.pos <- pos + advance_n_bytes;
+  pkt
+
+let is_flush_pkt = function Flush_pkt -> true | _ -> false
+
 let junk_pkt decoder =
   let len = pkt_len_unsafe decoder in
   if len < 4 then decoder.pos <- decoder.pos + 4
   else decoder.pos <- decoder.pos + len
+
+let junk_chars n ({ pos; _ } as decoder) =
+  assert (n >= 4);
+  decoder.pos <- pos + n
 
 let peek_while_eol decoder =
   let idx = ref decoder.pos in

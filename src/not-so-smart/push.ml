@@ -39,8 +39,8 @@ struct
         pp_error = Flow.pp_error;
       }
 
-  let push ?(uses_git_transport = false) ~capabilities:client_caps cmds ~host
-      path flow store access { stateless } pack =
+  let push ?(uses_git_transport = true) ~capabilities:client_caps cmds ~host
+      path flow store access push_cfg pack =
     let fiber ctx =
       let open Smart in
       let* () =
@@ -50,11 +50,12 @@ struct
         else return ()
       in
       let* v = recv ctx advertised_refs in
-      Context.replace_server_caps ctx (Smart.Advertised_refs.capabilities v);
+      let server_caps = Smart.Advertised_refs.capabilities v in
+      Context.replace_server_caps ctx server_caps;
       return (Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v)
     in
     let ctx = Smart.Context.make ~client_caps in
-    Smart_flow.run sched fail io flow (fiber ctx) |> prj
+    State_flow.run sched fail Smart.pp_error io flow (fiber ctx) |> prj
     >>= fun advertised_refs ->
     Pck.commands sched ~capabilities:client_caps ~equal:Ref.equal
       ~deref:access.Sigs.deref store cmds
@@ -62,10 +63,12 @@ struct
     |> prj
     >>= function
     | None ->
-        Smart_flow.run sched fail io flow Smart.(send ctx flush ()) |> prj
+        State_flow.run sched fail Smart.pp_error io flow
+          Smart.(send ctx flush ())
+        |> prj
         >>= fun () -> return ()
     | Some cmds -> (
-        Smart_flow.run sched fail io flow
+        State_flow.run sched fail Smart.pp_error io flow
           Smart.(
             send ctx commands
               (Commands.map ~fuid:Uid.to_hex ~fref:Ref.to_string cmds))
@@ -87,7 +90,7 @@ struct
           Smart.Context.is_cap_shared ctx `Side_band
           || Smart.Context.is_cap_shared ctx `Side_band_64k
         in
-        let pack = Smart.send_pack ~stateless side_band in
+        let pack = Smart.send_pack ~stateless:push_cfg.stateless side_band in
         let rec go () =
           stream () >>= function
           | None ->
@@ -97,12 +100,13 @@ struct
               Log.debug (fun m ->
                   m "report-status capability: %b." report_status);
               if report_status then
-                Smart_flow.run sched fail io flow
+                State_flow.run sched fail Smart.pp_error io flow
                   Smart.(recv ctx (status side_band))
                 |> prj
                 >>| Smart.Status.map ~f:Ref.v
               else if uses_git_transport then
-                Smart_flow.run sched fail io flow Smart.(recv ctx recv_flush)
+                State_flow.run sched fail Smart.pp_error io flow
+                  Smart.(recv ctx recv_flush)
                 |> prj
                 >>= fun () ->
                 let cmds = List.map R.ok (Smart.Commands.commands cmds) in
@@ -111,7 +115,8 @@ struct
                 let cmds = List.map R.ok (Smart.Commands.commands cmds) in
                 return (Smart.Status.v cmds)
           | Some payload ->
-              Smart_flow.run sched fail io flow Smart.(send ctx pack payload)
+              State_flow.run sched fail Smart.pp_error io flow
+                Smart.(send ctx pack payload)
               |> prj
               >>= fun () -> go ()
         in

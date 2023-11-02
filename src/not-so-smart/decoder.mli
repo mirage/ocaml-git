@@ -91,12 +91,40 @@ val peek_while_eol : decoder -> bytes * int * int
 val peek_while_eol_or_space : decoder -> bytes * int * int
 val peek_pkt : decoder -> bytes * int * int
 
+type pkt =
+  | Flush_pkt  (** length in hex 0000 *)
+  | Delim_pkt  (** 0001 *)
+  | Response_end_pkt  (** 0002 *)
+  | Invalid_len_pkt of int  (** 0003 or 0004; the latter is meaningless *)
+  | Pkt of (int * string)
+      (** (enc-pkt-len, pkt-content) e.g., 0008done is represented as (8, "done") *)
+
+val is_flush_pkt : pkt -> bool
+
+val encoded_pkt_len : pkt -> int
+(** returns the length of packet encoded in first 4 bytes of the packet
+    e.g., for a packet "0008done", 8 is returned *)
+
+val pkt_len_at_least_4 : pkt -> int
+(** [pkt_len pkt] returns [max 4 (encoded_pkt_len pkt)],
+    i.e., the returned value >= 4 *)
+
+val peek_pkt' : ?trim:bool -> decoder -> pkt
+
+val read_pkt : ?trim:bool -> decoder -> pkt
+(** returns the packet and advances [decoder.pos] to packet's full length *)
+
 val junk_pkt : decoder -> unit
 (** increase [decoder.pos] by [max min_pkt_len pkt_len], where [pkt_len] is the length
     of the pkt line starting at the current value of [decoder.pos] (before increasing) and
     [min_pkt_len = 4].
 
     @raise Invalid_argument if there aren't 4 bytes representing the length *)
+
+val junk_chars : int -> decoder -> unit
+(** [junk_chars n d] increases [d.pos] by [n];
+    can be used similar to [junk_pkt] when the length of a packet line is known from
+    [peek_pkt], for example. *)
 
 val prompt_pkt :
   ?strict:bool ->

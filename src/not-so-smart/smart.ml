@@ -55,6 +55,10 @@ module Value = struct
 
   type error = [ Protocol.Encoder.error | Protocol.Decoder.error ]
 
+  let pp_error ppf = function
+    | #Protocol.Encoder.error as err -> Protocol.Encoder.pp_error ppf err
+    | #Protocol.Decoder.error as err -> Protocol.Decoder.pp_error ppf err
+
   let encode :
       type a. encoder -> a send -> a -> (unit, [> Encoder.error ]) State.t =
    fun encoder w v ->
@@ -117,21 +121,7 @@ type ('a, 'err) t = ('a, 'err) State.t =
   | Return of 'a
   | Error of 'err
 
-module Context = struct
-  type t = State.Context.t
-
-  type capabilities = State.Context.capabilities = {
-    client_caps : Capability.t list;
-    server_caps : Capability.t list;
-  }
-
-  let make = State.Context.make
-  let with_decoder = State.Context.with_decoder
-  let replace_server_caps = State.Context.replace_server_caps
-  let is_cap_shared = State.Context.is_cap_shared
-  let capabilities = State.Context.capabilities
-end
-
+module Context = State.Context
 include Witness
 
 let proto_request = Proto_request
@@ -157,14 +147,10 @@ let packet ~trim = Packet trim
 let send_advertised_refs : _ send = Advertised_refs
 let recv_commands : _ recv = Commands
 
-include State.Scheduler (State.Context) (Value)
-
-let pp_error ppf = function
-  | #Protocol.Encoder.error as err -> Protocol.Encoder.pp_error ppf err
-  | #Protocol.Decoder.error as err -> Protocol.Decoder.pp_error ppf err
+include State.Scheduler (Context)(Value)
 
 module Unsafe = struct
   let write context packet =
-    let encoder = State.Context.encoder context in
+    let encoder = Context.encoder context in
     Protocol.Encoder.unsafe_encode_packet encoder ~packet
 end

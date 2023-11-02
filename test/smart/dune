@@ -13,45 +13,49 @@
   unix_backend
   pipe)
  (libraries
-  git_version
-  git.nss.pkt-line
-  ptime
-  ptime.clock.os
-  mirage-flow
-  mimic
-  git.nss.unixiz
-  git
-  git-unix
-  result
-  mirage-crypto-rng
-  mirage-crypto-rng.unix
+  alcotest
+  alcotest-lwt
+  astring
+  bigstringaf
+  bos
+  carton
+  carton-lwt
+  capability
+  cstruct
   digestif
   digestif.c
   domain-name
+  fmt
+  fmt.tty
+  fpath
+  git
   git.nss
   git.nss.git
-  bos
-  fpath
-  carton-lwt
-  bigstringaf
-  git.nss.sigs
   git.nss.hkt
-  fmt
   git.nss.pck
-  carton
-  rresult
-  alcotest
+  git.nss.pkt-line
+  git.nss.sigs
   git.nss.smart
-  lwt.unix
-  astring
-  lwt
-  cstruct
-  uri
-  fmt.tty
+  git.nss.state
+  git.nss.unixiz
+  git.nss.wire-proto-v2
+  git-unix
+  git_version
   logs
   logs.fmt
-  alcotest-lwt
-  unix))
+  lwt
+  lwt.unix
+  mimic
+  mirage-crypto-rng
+  mirage-crypto-rng.unix
+  mirage-flow
+  ptime
+  ptime.clock.os
+  result
+  rresult
+  unix
+  uri
+))
 
 (executable
  (name test_edn)
