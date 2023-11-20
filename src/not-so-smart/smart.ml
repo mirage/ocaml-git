@@ -141,7 +141,7 @@ include Witness
 
 let proto_request = Proto_request
 let advertised_refs = Advertised_refs
-let want : _ send = Want
+let send_want : _ send = Want
 let negotiation_done = Done
 let negotiation_result = Result
 let commands : _ send = Commands

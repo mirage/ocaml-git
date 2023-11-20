@@ -62,6 +62,8 @@ let advertised_ref =
 
 let ( >>= ) = Crowbar.dynamic_bind
 
+(* TODO(dinosaure): we probably can factorise [of_string]/[to_string]. *)
+
 let () =
   let of_string str =
     let ctx = Smart.Context.make ~client_caps:[] in
@@ -150,3 +152,48 @@ let () =
     ~eq:(Smart.Advertised_refs.equal ~uid:String.equal ~reference:String.equal)
     (Smart.Advertised_refs.v1 ~shallows ~capabilities refs)
     res
+
+let () =
+  let of_string str =
+    let ctx = Smart.Context.make ~client_caps:[] in
+    let state = Smart.decode ctx Smart.recv_want (fun _ctx res -> Return res) in
+    let pos = ref 0 in
+    let rec go = function
+      | Smart.Read { buffer; off; len; k; eof } ->
+          if !pos = String.length str then go (eof ())
+          else
+            let len = min (String.length str - !pos) len in
+            Bytes.blit_string str !pos buffer off len;
+            pos := !pos + len;
+            go (k len)
+      | Smart.Write _ -> Crowbar.fail "Unexpected [Write]"
+      | Smart.Error (`Protocol err) -> Crowbar.failf "%a" Smart.pp_error err
+      | Smart.Return v -> v
+    in
+    go state
+  in
+  let to_string v =
+    let ctx = Smart.Context.make ~client_caps:[] in
+    let buf = Buffer.create 0x1000 in
+    let state =
+      Smart.encode ctx Smart.send_want v (fun _ctx ->
+          Return (Buffer.contents buf))
+    in
+    let rec go = function
+      | Smart.Write { buffer; off; len; k } ->
+          Buffer.add_substring buf buffer off len;
+          go (k len)
+      | Smart.Read _ -> Crowbar.failf "Unexpected [Read]"
+      | Smart.Error (`Protocol err) -> Crowbar.failf "%a" Smart.pp_error err
+      | Smart.Return v -> v
+    in
+    go state
+  in
+  Crowbar.add_test ~name:"want" Crowbar.[ list1 sha1 ] @@ fun wants ->
+  let wants = List.map Digestif.SHA1.to_hex wants in
+  let v = Smart.Want.v ~capabilities:[] wants in
+  let str = to_string v in
+  let res = of_string str in
+  Crowbar.check_eq ~pp:Smart.Want.pp
+    ~eq:(Smart.Want.equal ~uid:String.equal ~reference:String.equal)
+    v res

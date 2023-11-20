@@ -137,8 +137,51 @@ module Want = struct
     capabilities : Capability.t list;
   }
 
-  let want ~capabilities ?deepen ?filter ?(shallows = []) ?(others = []) hash =
-    { wants = hash, others; shallows; deepen; filter; capabilities }
+  let v ~capabilities ?deepen ?filter ?(shallows = []) = function
+    | [] -> invalid_arg "Smart.Want.v: you must specify, at least, one hash"
+    | hd :: tl -> { wants = hd, tl; shallows; deepen; filter; capabilities }
+
+  let pp_deepen ppf = function
+    | `Depth n -> Fmt.pf ppf "@[<1>(`Depth %d)@]" n
+    | `Timestamp v -> Fmt.pf ppf "@[<1>(`Timestamp %Ld)@]" v
+    | `Not reference -> Fmt.pf ppf "@[<1>(`Not %S)@]" reference
+
+  let equal_deepen ~reference a b =
+    match a, b with
+    | Some (`Depth a), Some (`Depth b) -> a = b
+    | Some (`Timestamp a), Some (`Timestamp b) -> a = b
+    | Some (`Not a), Some (`Not b) -> reference a b
+    | None, None -> true
+    | _ -> false
+
+  let equal_filter : Filter.t option -> Filter.t option -> bool =
+   fun a b ->
+    match a, b with None, None -> true | Some _, _ -> . | _, Some _ -> .
+
+  let pp ppf { wants; shallows; deepen; filter; capabilities } =
+    Fmt.pf ppf
+      "@[<hov>{ wants=@[<hov>%a@];@ shallows=@[<hov>%a@];@ \
+       deepen=@[<hov>%a@];@ filter=@[<hov>%a@];@ capabilities=@[<hov>%a@]; }@]"
+      Fmt.(Dump.list string)
+      (fst wants :: snd wants)
+      Fmt.(Dump.list string)
+      shallows
+      Fmt.(Dump.option pp_deepen)
+      deepen
+      Fmt.(Dump.option Filter.pp)
+      filter
+      Fmt.(Dump.list Capability.pp)
+      capabilities
+
+  let equal ~uid ~reference a b =
+    uid (fst a.wants) (fst b.wants)
+    && List.for_all2 uid (snd a.wants) (snd b.wants)
+    && List.for_all2 uid a.shallows b.shallows
+    && equal_deepen ~reference a.deepen b.deepen
+    && equal_filter a.filter b.filter
+    && List.for_all2 Capability.equal
+         (List.sort Capability.compare a.capabilities)
+         (List.sort Capability.compare b.capabilities)
 end
 
 module Have = struct
@@ -576,10 +619,8 @@ module Decoder = struct
         let v = peek_pkt decoder in
         if Sub.is_empty v then (
           junk_pkt decoder;
-          return
-            (Want.want ~capabilities ~others:(List.rev wants) first_want)
-            decoder
-          (* else if start with shallow or depth request or filter request then TODO *))
+          return (Want.v ~capabilities (first_want :: List.rev wants)) decoder
+          (* TODO else if start with shallow or depth request or filter request then *))
         else
           match Sub.cut ~sep:v_space v with
           | Some (_, new_want) ->
@@ -596,8 +637,18 @@ module Decoder = struct
       let v = peek_pkt decoder in
       if Sub.is_prefix v ~affix:v_want then (
         let v = v |> Sub.with_range ~first:(Sub.length v_want) in
-        match Sub.cut ~sep:v_zero v with
-        | None -> fail decoder (`Invalid_want (Sub.to_string v))
+        (* NOTE(dinosaure): we accept more than Git. The BNF syntax of
+           [first-want] is:
+           first-want := PKT-LINE("want" SP obj-id SP capability-list)
+
+           Here, we allow the client to pass 0 capabilities where Git expects,
+           at least, one. *)
+        match Sub.cut ~sep:v_space v with
+        | None ->
+            let first_want = Sub.to_string v in
+            junk_pkt decoder;
+            let k = decode_all_wants ~first_want ~capabilities:[] in
+            prompt_pkt k decoder
         | Some (first_want, capabilities) ->
             let first_want = Sub.to_string first_want in
             junk_pkt decoder;

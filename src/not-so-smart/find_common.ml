@@ -133,9 +133,9 @@ let find_common (type t) scheduler io flow cfg
             (deepen
               :> [ `Depth of int | `Not of string | `Timestamp of int64 ] option)
           in
-          send ctx want
-            (Want.want ~capabilities:client_caps ~shallows:shallowed ?deepen uid
-               ~others))
+          send ctx send_want
+            (Want.v ~capabilities:client_caps ~shallows:shallowed ?deepen
+               (uid :: others)))
       >>= fun () ->
       (match deepen with
       | None -> return ()

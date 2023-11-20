@@ -61,14 +61,22 @@ end
 module Want : sig
   type ('uid, 'reference) t
 
-  val want :
+  val v :
     capabilities:Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 | `Not of 'reference ] ->
     ?filter:Filter.t ->
     ?shallows:'uid list ->
-    ?others:'uid list ->
-    'uid ->
+    'uid list ->
     ('uid, 'reference) t
+
+  val pp : (string, string) t Fmt.t
+
+  val equal :
+    uid:('uid -> 'uid -> bool) ->
+    reference:('ref -> 'ref -> bool) ->
+    ('uid, 'ref) t ->
+    ('uid, 'ref) t ->
+    bool
 end
 
 module Have : sig
@@ -212,7 +220,7 @@ end
 type 'a send
 
 val proto_request : Proto_request.t send
-val want : (string, string) Want.t send
+val send_want : (string, string) Want.t send
 val negotiation_done : unit send
 val flush : unit send
 val commands : (string, string) Commands.t send
