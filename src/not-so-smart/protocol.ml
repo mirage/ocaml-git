@@ -185,9 +185,9 @@ module Want = struct
 end
 
 module Have = struct
-  type 'uid t = 'uid list
+  type 'uid t = 'uid list * [ `Done | `Flush ]
 
-  let have haves = haves
+  let have ~cmd haves = haves, cmd
 end
 
 module Result = struct
@@ -392,6 +392,7 @@ module Decoder = struct
   let v_version = String.Sub.of_string "version"
   let v_nak = String.Sub.of_string "NAK"
   let v_ack = String.Sub.of_string "ACK"
+  let v_done = String.Sub.of_string "done"
   let v_have = String.Sub.of_string "have"
   let v_want = String.Sub.of_string "want "
 
@@ -597,7 +598,10 @@ module Decoder = struct
       let v = peek_pkt decoder in
       if Sub.is_empty v then (
         junk_pkt decoder;
-        return (Have.have (List.rev haves)) decoder)
+        return (Have.have ~cmd:`Flush (List.rev haves)) decoder)
+      else if Sub.equal_bytes v_done v then (
+        junk_pkt decoder;
+        return (Have.have ~cmd:`Done (List.rev haves)) decoder)
       else
         match Sub.cut ~sep:v_space v with
         | Some (have, new_have) ->
