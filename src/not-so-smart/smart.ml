@@ -126,13 +126,13 @@ module Context = struct
   type t = State.Context.t
 
   type capabilities = State.Context.capabilities = {
-    client_caps : Capability.t list;
-    server_caps : Capability.t list;
+    my_caps : Capability.t list;
+    their_caps : Capability.t list;
   }
 
   let make = State.Context.make
   let with_decoder = State.Context.with_decoder
-  let replace_server_caps = State.Context.replace_server_caps
+  let replace_their_caps = State.Context.replace_their_caps
   let is_cap_shared = State.Context.is_cap_shared
   let capabilities = State.Context.capabilities
 end

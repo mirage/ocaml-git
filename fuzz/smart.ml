@@ -66,7 +66,7 @@ let ( >>= ) = Crowbar.dynamic_bind
 
 let () =
   let of_string str =
-    let ctx = Smart.Context.make ~client_caps:[] in
+    let ctx = Smart.Context.make ~my_caps:[] in
     let state =
       Smart.decode ctx (Smart.packet ~trim:false) (fun _ctx res -> Return res)
     in
@@ -99,7 +99,7 @@ let () =
 
 let () =
   let of_string str =
-    let ctx = Smart.Context.make ~client_caps:[] in
+    let ctx = Smart.Context.make ~my_caps:[] in
     let state =
       Smart.decode ctx Smart.advertised_refs (fun _ctx res -> Return res)
     in
@@ -119,7 +119,7 @@ let () =
     go state
   in
   let to_string v =
-    let ctx = Smart.Context.make ~client_caps:[] in
+    let ctx = Smart.Context.make ~my_caps:[] in
     let buf = Buffer.create 0x1000 in
     let state =
       Smart.encode ctx Smart.send_advertised_refs v (fun _ctx ->
@@ -155,7 +155,7 @@ let () =
 
 let () =
   let of_string str =
-    let ctx = Smart.Context.make ~client_caps:[] in
+    let ctx = Smart.Context.make ~my_caps:[] in
     let state = Smart.decode ctx Smart.recv_want (fun _ctx res -> Return res) in
     let pos = ref 0 in
     let rec go = function
@@ -173,7 +173,7 @@ let () =
     go state
   in
   let to_string v =
-    let ctx = Smart.Context.make ~client_caps:[] in
+    let ctx = Smart.Context.make ~my_caps:[] in
     let buf = Buffer.create 0x1000 in
     let state =
       Smart.encode ctx Smart.send_want v (fun _ctx ->

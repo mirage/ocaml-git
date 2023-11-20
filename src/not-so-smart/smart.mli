@@ -203,16 +203,13 @@ module Context : sig
   type t
 
   type capabilities = State.Context.capabilities = {
-    client_caps : Capability.t list;
-    server_caps : Capability.t list;
+    my_caps : Capability.t list;
+    their_caps : Capability.t list;
   }
 
-  val make : client_caps:Capability.t list -> t
-
-  val with_decoder :
-    client_caps:Capability.t list -> Pkt_line.Decoder.decoder -> t
-
-  val replace_server_caps : t -> Capability.t list -> unit
+  val make : my_caps:Capability.t list -> t
+  val with_decoder : my_caps:Capability.t list -> Pkt_line.Decoder.decoder -> t
+  val replace_their_caps : t -> Capability.t list -> unit
   val is_cap_shared : t -> Capability.t -> bool
   val capabilities : t -> capabilities
 end

@@ -35,8 +35,8 @@ end
 
 module Context = struct
   type capabilities = {
-    client_caps : Capability.t list;
-    server_caps : Capability.t list;
+    my_caps : Capability.t list;
+    their_caps : Capability.t list;
   }
 
   type t = {
@@ -50,31 +50,31 @@ module Context = struct
 
   let pp _pp_ctx _ppf _t = ()
 
-  let make ~client_caps =
-    let capabilities = { client_caps; server_caps = [] } in
+  let make ~my_caps =
+    let capabilities = { my_caps; their_caps = [] } in
     {
       encoder = Pkt_line.Encoder.create ();
       decoder = Pkt_line.Decoder.create ();
       capabilities;
     }
 
-  let with_decoder ~client_caps decoder =
+  let with_decoder ~my_caps decoder =
     {
       encoder = Pkt_line.Encoder.create ();
       decoder;
-      capabilities = { client_caps; server_caps = [] };
+      capabilities = { my_caps; their_caps = [] };
     }
 
   let encoder { encoder; _ } = encoder
   let decoder { decoder; _ } = decoder
   let capabilities { capabilities; _ } = capabilities
 
-  let replace_server_caps ctx server_caps =
-    ctx.capabilities <- { ctx.capabilities with server_caps }
+  let replace_their_caps ctx their_caps =
+    ctx.capabilities <- { ctx.capabilities with their_caps }
 
-  let is_cap_shared { capabilities = { client_caps; server_caps }; _ } cap =
+  let is_cap_shared { capabilities = { my_caps; their_caps }; _ } cap =
     let is_cap_in caps = List.exists (fun c -> Capability.equal c cap) caps in
-    is_cap_in client_caps && is_cap_in server_caps
+    is_cap_in my_caps && is_cap_in their_caps
 end
 
 module Scheduler

@@ -34,8 +34,8 @@ end
 
 module Context : sig
   type capabilities = {
-    client_caps : Capability.t list;
-    server_caps : Capability.t list;
+    my_caps : Capability.t list;
+    their_caps : Capability.t list;
   }
 
   include
@@ -43,13 +43,10 @@ module Context : sig
       with type encoder = Pkt_line.Encoder.encoder
        and type decoder = Pkt_line.Decoder.decoder
 
-  val make : client_caps:Capability.t list -> t
-
-  val with_decoder :
-    client_caps:Capability.t list -> Pkt_line.Decoder.decoder -> t
-
+  val make : my_caps:Capability.t list -> t
+  val with_decoder : my_caps:Capability.t list -> Pkt_line.Decoder.decoder -> t
   val capabilities : t -> capabilities
-  val replace_server_caps : t -> Capability.t list -> unit
+  val replace_their_caps : t -> Capability.t list -> unit
   val is_cap_shared : t -> Capability.t -> bool
 end
 
