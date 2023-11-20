@@ -61,14 +61,28 @@ end
 module Want : sig
   type ('uid, 'reference) t
 
-  val want :
+  val v :
     capabilities:Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 | `Not of 'reference ] ->
     ?filter:Filter.t ->
     ?shallows:'uid list ->
-    ?others:'uid list ->
-    'uid ->
+    'uid list ->
     ('uid, 'reference) t
+
+  val pp : (string, string) t Fmt.t
+
+  val equal :
+    uid:('uid -> 'uid -> bool) ->
+    reference:('ref -> 'ref -> bool) ->
+    ('uid, 'ref) t ->
+    ('uid, 'ref) t ->
+    bool
+end
+
+module Have : sig
+  type 'uid t
+
+  val have : 'uid list -> 'uid t
 end
 
 module Result : sig
@@ -176,6 +190,8 @@ type error =
   | `Invalid_result of string
   | `Invalid_command_result of string
   | `Invalid_command of string
+  | `Invalid_want of string
+  | `Invalid_have of string
   | `No_enough_space
   | `Unexpected_pkt_line of string
   | `Unexpected_flush
@@ -204,7 +220,7 @@ end
 type 'a send
 
 val proto_request : Proto_request.t send
-val want : (string, string) Want.t send
+val send_want : (string, string) Want.t send
 val negotiation_done : unit send
 val flush : unit send
 val commands : (string, string) Commands.t send
@@ -229,6 +245,8 @@ val shallows : string Shallow.t list recv
 val status : bool -> string Status.t recv
 val packet : trim:bool -> string recv
 val send_advertised_refs : (string, string) Advertised_refs.t send
+val recv_want : (string, string) Want.t recv
+val recv_have : string Have.t recv
 val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
 val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
 val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t

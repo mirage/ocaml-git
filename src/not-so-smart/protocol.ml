@@ -137,8 +137,57 @@ module Want = struct
     capabilities : Capability.t list;
   }
 
-  let want ~capabilities ?deepen ?filter ?(shallows = []) ?(others = []) hash =
-    { wants = hash, others; shallows; deepen; filter; capabilities }
+  let v ~capabilities ?deepen ?filter ?(shallows = []) = function
+    | [] -> invalid_arg "Smart.Want.v: you must specify, at least, one hash"
+    | hd :: tl -> { wants = hd, tl; shallows; deepen; filter; capabilities }
+
+  let pp_deepen ppf = function
+    | `Depth n -> Fmt.pf ppf "@[<1>(`Depth %d)@]" n
+    | `Timestamp v -> Fmt.pf ppf "@[<1>(`Timestamp %Ld)@]" v
+    | `Not reference -> Fmt.pf ppf "@[<1>(`Not %S)@]" reference
+
+  let equal_deepen ~reference a b =
+    match a, b with
+    | Some (`Depth a), Some (`Depth b) -> a = b
+    | Some (`Timestamp a), Some (`Timestamp b) -> a = b
+    | Some (`Not a), Some (`Not b) -> reference a b
+    | None, None -> true
+    | _ -> false
+
+  let equal_filter : Filter.t option -> Filter.t option -> bool =
+   fun a b ->
+    match a, b with None, None -> true | Some _, _ -> . | _, Some _ -> .
+
+  let pp ppf { wants; shallows; deepen; filter; capabilities } =
+    Fmt.pf ppf
+      "@[<hov>{ wants=@[<hov>%a@];@ shallows=@[<hov>%a@];@ \
+       deepen=@[<hov>%a@];@ filter=@[<hov>%a@];@ capabilities=@[<hov>%a@]; }@]"
+      Fmt.(Dump.list string)
+      (fst wants :: snd wants)
+      Fmt.(Dump.list string)
+      shallows
+      Fmt.(Dump.option pp_deepen)
+      deepen
+      Fmt.(Dump.option Filter.pp)
+      filter
+      Fmt.(Dump.list Capability.pp)
+      capabilities
+
+  let equal ~uid ~reference a b =
+    uid (fst a.wants) (fst b.wants)
+    && List.for_all2 uid (snd a.wants) (snd b.wants)
+    && List.for_all2 uid a.shallows b.shallows
+    && equal_deepen ~reference a.deepen b.deepen
+    && equal_filter a.filter b.filter
+    && List.for_all2 Capability.equal
+         (List.sort Capability.compare a.capabilities)
+         (List.sort Capability.compare b.capabilities)
+end
+
+module Have = struct
+  type 'uid t = 'uid list
+
+  let have haves = haves
 end
 
 module Result = struct
@@ -290,6 +339,7 @@ end
 module Decoder = struct
   open Astring
   open Pkt_line.Decoder
+  module Sub = String.Sub
 
   type nonrec error =
     [ error
@@ -301,6 +351,8 @@ module Decoder = struct
     | `Invalid_result of string
     | `Invalid_command_result of string
     | `Invalid_command of string
+    | `Invalid_want of string
+    | `Invalid_have of string
     | `Unexpected_flush
     | `Unexpected_pkt_line of string
     | `Invalid_pkt_line of string ]
@@ -317,6 +369,8 @@ module Decoder = struct
     | `Invalid_result raw -> Fmt.pf ppf "Invalid result (%S)" raw
     | `Invalid_command_result raw ->
         Fmt.pf ppf "Invalid result command (%S)" raw
+    | `Invalid_want raw -> Fmt.pf ppf "Invalid want (%S)" raw
+    | `Invalid_have raw -> Fmt.pf ppf "Invalid have (%S)" raw
     | `Unexpected_flush -> Fmt.string ppf "Unexpected flush"
     | `Unexpected_pkt_line raw -> Fmt.pf ppf "Unexpected pkt-line (%S)" raw
     | `Invalid_command cmd -> Fmt.pf ppf "Invalid command (%S)" cmd
@@ -338,6 +392,8 @@ module Decoder = struct
   let v_version = String.Sub.of_string "version"
   let v_nak = String.Sub.of_string "NAK"
   let v_ack = String.Sub.of_string "ACK"
+  let v_have = String.Sub.of_string "have"
+  let v_want = String.Sub.of_string "want "
 
   let decode_advertised_refs decoder =
     let decode_shallows advertised_refs decoder =
@@ -535,6 +591,76 @@ module Decoder = struct
       return r decoder
     in
     prompt_pkt k decoder
+
+  let decode_have decoder =
+    let rec go haves decoder =
+      let v = peek_pkt decoder in
+      if Sub.is_empty v then (
+        junk_pkt decoder;
+        return (Have.have (List.rev haves)) decoder)
+      else
+        match Sub.cut ~sep:v_space v with
+        | Some (have, new_have) ->
+            let haves =
+              if Sub.equal_bytes have v_have then
+                Sub.to_string new_have :: haves
+              else haves
+            in
+            let k decoder = go haves decoder in
+            junk_pkt decoder;
+            prompt_pkt k decoder
+        | _ -> fail decoder (`Invalid_have (Sub.to_string v))
+    in
+    prompt_pkt (go []) decoder
+
+  let decode_want decoder =
+    let decode_all_wants ~first_want ~capabilities decoder =
+      let rec go wants decoder =
+        let v = peek_pkt decoder in
+        if Sub.is_empty v then (
+          junk_pkt decoder;
+          return (Want.v ~capabilities (first_want :: List.rev wants)) decoder
+          (* TODO else if start with shallow or depth request or filter request then *))
+        else
+          match Sub.cut ~sep:v_space v with
+          | Some (_, new_want) ->
+              let new_want = Sub.to_string new_want in
+              let k decoder = go (new_want :: wants) decoder in
+              junk_pkt decoder;
+              prompt_pkt k decoder
+          | None -> fail decoder (`Invalid_want (Sub.to_string v))
+      in
+      go [] decoder
+    in
+
+    let decode_first_want decoder =
+      let v = peek_pkt decoder in
+      if Sub.is_prefix v ~affix:v_want then (
+        let v = v |> Sub.with_range ~first:(Sub.length v_want) in
+        (* NOTE(dinosaure): we accept more than Git. The BNF syntax of
+           [first-want] is:
+           first-want := PKT-LINE("want" SP obj-id SP capability-list)
+
+           Here, we allow the client to pass 0 capabilities where Git expects,
+           at least, one. *)
+        match Sub.cut ~sep:v_space v with
+        | None ->
+            let first_want = Sub.to_string v in
+            junk_pkt decoder;
+            let k = decode_all_wants ~first_want ~capabilities:[] in
+            prompt_pkt k decoder
+        | Some (first_want, capabilities) ->
+            let first_want = Sub.to_string first_want in
+            junk_pkt decoder;
+            let capabilities =
+              let capabilities = Sub.fields capabilities in
+              List.map (Capability.of_string <.> Sub.to_string) capabilities
+            in
+            let k = decode_all_wants ~first_want ~capabilities in
+            prompt_pkt k decoder)
+      else fail decoder (`Invalid_want (Sub.to_string v))
+    in
+    prompt_pkt decode_first_want decoder
 
   let prompt_pack_without_sideband kcontinue keof decoder =
     if decoder.pos > 0 then (

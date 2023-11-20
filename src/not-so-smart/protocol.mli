@@ -53,14 +53,28 @@ end
 module Want : sig
   type ('uid, 'reference) t
 
-  val want :
+  val v :
     capabilities:Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 | `Not of 'reference ] ->
     ?filter:Filter.t ->
     ?shallows:'uid list ->
-    ?others:'uid list ->
-    'uid ->
+    'uid list ->
     ('uid, 'reference) t
+
+  val pp : (string, string) t Fmt.t
+
+  val equal :
+    uid:('uid -> 'uid -> bool) ->
+    reference:('ref -> 'ref -> bool) ->
+    ('uid, 'ref) t ->
+    ('uid, 'ref) t ->
+    bool
+end
+
+module Have : sig
+  type 'uid t
+
+  val have : 'uid list -> 'uid t
 end
 
 module Result : sig
@@ -151,6 +165,8 @@ module Decoder : sig
     | `Invalid_result of string
     | `Invalid_command_result of string
     | `Invalid_command of string
+    | `Invalid_want of string
+    | `Invalid_have of string
     | `Unexpected_pkt_line of string
     | `Unexpected_flush
     | `Invalid_pkt_line of string ]
@@ -182,6 +198,8 @@ module Decoder : sig
     ?sideband:bool -> decoder -> (string Status.t, [> error ]) state
 
   val decode_packet : trim:bool -> decoder -> (string, [> error ]) state
+  val decode_want : decoder -> ((string, string) Want.t, [> error ]) state
+  val decode_have : decoder -> (string Have.t, [> error ]) state
 
   val decode_commands :
     decoder -> ((string, string) Commands.t option, [> error ]) state

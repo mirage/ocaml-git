@@ -7,6 +7,7 @@ include struct
   module Proto_request = Proto_request
   module Advertised_refs = Advertised_refs
   module Want = Want
+  module Have = Have
   module Result = Result
   module Negotiation = Negotiation
   module Shallow = Shallow
@@ -43,6 +44,8 @@ module Witness = struct
     | Ack : string Negotiation.t recv
     | Flush : unit recv
     | Shallows : string Shallow.t list recv
+    | Want : (string, string) Want.t recv
+    | Have : string Have.t recv
 end
 
 module Value = struct
@@ -102,7 +105,9 @@ module Value = struct
        | Status sideband -> decode_status ~sideband decoder
        | Flush -> decode_flush decoder
        | Shallows -> decode_shallows decoder
-       | Packet trim -> decode_packet ~trim decoder)
+       | Packet trim -> decode_packet ~trim decoder
+       | Have -> decode_have decoder
+       | Want -> decode_want decoder)
 end
 
 type ('a, 'err) t = ('a, 'err) State.t =
@@ -136,7 +141,7 @@ include Witness
 
 let proto_request = Proto_request
 let advertised_refs = Advertised_refs
-let want = Want
+let send_want : _ send = Want
 let negotiation_done = Done
 let negotiation_result = Result
 let commands : _ send = Commands
@@ -155,6 +160,8 @@ let send_pack ?(stateless = false) side_band =
 
 let packet ~trim = Packet trim
 let send_advertised_refs : _ send = Advertised_refs
+let recv_want : _ recv = Want
+let recv_have : _ recv = Have
 let recv_commands : _ recv = Commands
 
 include State.Scheduler (State.Context) (Value)
