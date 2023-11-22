@@ -114,61 +114,66 @@ struct
       recv ctx recv_want
     in
     let ctx = Smart.Context.make ~my_caps in
-    Smart_flow.run sched fail io flow (fiber ctx) |> prj >>= fun wants ->
-    (* TODO: Check that all the [wants] are in the store and each are the tip of a ref. *)
-    Smart.Context.replace_their_caps ctx wants.Smart.Want.capabilities;
+    Smart_flow.run sched fail io flow (fiber ctx) |> prj >>= function
+    | None -> return ()
+    | Some wants ->
+        (* TODO: Check that all the [wants] are in the store and each are the tip of a ref. *)
+        Smart.Context.replace_their_caps ctx wants.Smart.Want.capabilities;
 
-    let rec negotiate neg =
-      Smart_flow.run sched fail io flow Smart.(recv ctx recv_have) |> prj
-      >>= fun have ->
-      let h, cmd =
-        (Smart.Have.map ~f:of_hex have :> Uid.t list * [ `Done | `Flush ])
-      in
-      Server_neg.ack store access ~wants neg h >>= fun (neg, acks) ->
-      let acks = List.map (Smart.Negotiation.map ~f:to_hex) acks in
-      Smart_flow.run sched fail io flow Smart.(send ctx send_acks acks) |> prj
-      >>= fun () ->
-      match cmd with
-      | `Done -> (
-          match Server_neg.last_common neg with
-          | Some _ack ->
-              (* TODO: work out when to send NAKs to follow the protocol... *)
-              (* let ack = Smart.Negotiation.map ~f:to_hex ack in *)
-              (* Smart_flow.run sched fail io flow *)
-              (*   Smart.(send ctx send_acks [ ack ]) *)
-              (* |> prj *)
-              (* >>= fun () -> return neg *)
-              return neg
-          | None ->
-              (* TODO: work out when to send NAKs to follow the protocol... *)
-              (* Smart_flow.run sched fail io flow Smart.(send ctx send_acks []) *)
-              (* |> prj *)
-              (* >>= fun () ->  *)
-              return neg)
-      | `Flush -> negotiate neg
-    in
-    negotiate Server_neg.empty >>= fun neg ->
-    let sources =
-      let a, b = wants.wants in
-      List.map of_hex (a :: b)
-    in
-    Pck.get_uncommon_objects sched ~compare:Uid.compare access store
-      ~exclude:neg.haves ~sources
-    |> prj
-    >>= fun uids ->
-    Log.debug (fun m -> m "Prepare a pack of %d object(s)." (List.length uids));
-    let stream = pack uids in
-    let side_band =
-      Smart.Context.is_cap_shared ctx `Side_band
-      || Smart.Context.is_cap_shared ctx `Side_band_64k
-    in
-    let pack = Smart.send_pack side_band in
-    let rec go () =
-      stream () >>= function
-      | None -> return ()
-      | Some payload ->
-          Smart_flow.run sched fail io flow Smart.(send ctx pack payload) |> prj
-          >>= fun () -> go ()
-    in
-    go ()
+        let rec negotiate neg =
+          Smart_flow.run sched fail io flow Smart.(recv ctx recv_have) |> prj
+          >>= fun have ->
+          let h, cmd =
+            (Smart.Have.map ~f:of_hex have :> Uid.t list * [ `Done | `Flush ])
+          in
+          Server_neg.ack store access ~wants neg h >>= fun (neg, acks) ->
+          let acks = List.map (Smart.Negotiation.map ~f:to_hex) acks in
+          Smart_flow.run sched fail io flow Smart.(send ctx send_acks acks)
+          |> prj
+          >>= fun () ->
+          match cmd with
+          | `Done -> (
+              match Server_neg.last_common neg with
+              | Some _ack ->
+                  (* TODO: work out when to send NAKs to follow the protocol... *)
+                  (* let ack = Smart.Negotiation.map ~f:to_hex ack in *)
+                  (* Smart_flow.run sched fail io flow *)
+                  (*   Smart.(send ctx send_acks [ ack ]) *)
+                  (* |> prj *)
+                  (* >>= fun () -> return neg *)
+                  return neg
+              | None ->
+                  (* TODO: work out when to send NAKs to follow the protocol... *)
+                  (* Smart_flow.run sched fail io flow Smart.(send ctx send_acks []) *)
+                  (* |> prj *)
+                  (* >>= fun () ->  *)
+                  return neg)
+          | `Flush -> negotiate neg
+        in
+        negotiate Server_neg.empty >>= fun neg ->
+        let sources =
+          let a, b = wants.wants in
+          List.map of_hex (a :: b)
+        in
+        Pck.get_uncommon_objects sched ~compare:Uid.compare access store
+          ~exclude:neg.haves ~sources
+        |> prj
+        >>= fun uids ->
+        Log.debug (fun m ->
+            m "Prepare a pack of %d object(s)." (List.length uids));
+        let stream = pack uids in
+        let side_band =
+          Smart.Context.is_cap_shared ctx `Side_band
+          || Smart.Context.is_cap_shared ctx `Side_band_64k
+        in
+        let pack = Smart.send_pack side_band in
+        let rec go () =
+          stream () >>= function
+          | None -> return ()
+          | Some payload ->
+              Smart_flow.run sched fail io flow Smart.(send ctx pack payload)
+              |> prj
+              >>= fun () -> go ()
+        in
+        go ()
 end
