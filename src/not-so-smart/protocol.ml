@@ -623,7 +623,9 @@ module Decoder = struct
         let v = peek_pkt decoder in
         if Sub.is_empty v then (
           junk_pkt decoder;
-          return (Want.v ~capabilities (first_want :: List.rev wants)) decoder
+          return
+            (Some (Want.v ~capabilities (first_want :: List.rev wants)))
+            decoder
           (* TODO else if start with shallow or depth request or filter request then *))
         else
           match Sub.cut ~sep:v_space v with
@@ -639,7 +641,8 @@ module Decoder = struct
 
     let decode_first_want decoder =
       let v = peek_pkt decoder in
-      if Sub.is_prefix v ~affix:v_want then (
+      if Sub.is_empty v then return None decoder
+      else if Sub.is_prefix v ~affix:v_want then (
         let v = v |> Sub.with_range ~first:(Sub.length v_want) in
         (* NOTE(dinosaure): we accept more than Git. The BNF syntax of
            [first-want] is:
@@ -1227,4 +1230,32 @@ module Encoder = struct
         flush (go buffer (off + len) (max - len)) encoder
     in
     go payload 0 (String.length payload) encoder
+
+  let encode_acks encoder acks =
+    (* TODO: Remove NACK from [Negotiation.t]. *)
+    let write_ack ack encoder =
+      let write_ack uid suffix =
+        write encoder "ACK";
+        write_space encoder;
+        write encoder uid;
+        match suffix with
+        | None -> ()
+        | Some s ->
+            write_space encoder;
+            write encoder s
+      in
+      match ack with
+      | Negotiation.ACK uid -> write_ack uid None
+      | ACK_continue uid -> write_ack uid (Some "continue")
+      | ACK_ready uid -> write_ack uid (Some "ready")
+      | ACK_common uid -> write_ack uid (Some "common")
+      | NAK -> write encoder "NAK"
+    in
+    let rec go acks encoder =
+      match acks with
+      | [] ->
+          delayed_write_pkt (write_ack Negotiation.NAK) (flush kdone) encoder
+      | hd :: tl -> delayed_write_pkt (write_ack hd) (go tl) encoder
+    in
+    go acks encoder
 end

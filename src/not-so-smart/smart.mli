@@ -244,12 +244,13 @@ val recv_pack :
 
 val recv_flush : unit recv
 val recv_commands : (string, string) Commands.t option recv
-val ack : string Negotiation.t recv
+val send_acks : string Negotiation.t list send
+val recv_ack : string Negotiation.t recv
 val shallows : string Shallow.t list recv
 val status : bool -> string Status.t recv
 val packet : trim:bool -> string recv
 val send_advertised_refs : (string, string) Advertised_refs.t send
-val recv_want : (string, string) Want.t recv
+val recv_want : (string, string) Want.t option recv
 val recv_have : string Have.t recv
 val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
 val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t

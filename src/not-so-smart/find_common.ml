@@ -172,7 +172,8 @@ let find_common (type t) scheduler io flow cfg
                 consume_shallow_list scheduler io flow cfg None hex ctx
                 >>= fun _shallows ->
                 let rec loop () =
-                  Smart_flow.run scheduler raise io flow Smart.(recv ctx ack)
+                  Smart_flow.run scheduler raise io flow
+                    Smart.(recv ctx recv_ack)
                   >>| Smart.Negotiation.map ~f:of_hex
                   >>= fun ack ->
                   match ack with
@@ -253,7 +254,7 @@ let find_common (type t) scheduler io flow cfg
       let rec go () =
         if !flushes > 0 || cfg.multi_ack = `Some || cfg.multi_ack = `Detailed
         then (
-          Smart_flow.run scheduler raise io flow Smart.(recv ctx ack)
+          Smart_flow.run scheduler raise io flow Smart.(recv ctx recv_ack)
           >>| Smart.Negotiation.map ~f:of_hex
           >>= fun ack ->
           match ack with
