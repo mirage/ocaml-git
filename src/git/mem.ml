@@ -331,7 +331,7 @@ module Make (Digestif : Digestif.S) = struct
     let iter index ~f =
       let f (uid, offset) = f uid offset in
       let f ~uid ~offset ~crc:_ = Lwt.apply f (uid, offset) in
-      Carton.Dec.Idx.map ~f index |> Lwt.join
+      Carton.Dec.Idx.map ~f index |> Lwt.join >>= Lwt.pause
     in
     let map pck_contents ~pos len =
       let pos = Int64.to_int pos in
