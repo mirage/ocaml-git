@@ -335,7 +335,7 @@ module Make (Digestif : Digestif.S) = struct
          objects the second time. *)
       let f ~uid ~offset ~crc:_ =
         Lwt.apply f (uid, offset) >>= fun res ->
-        Lwt.pause () >>= Lwt.return res in
+        Lwt.pause () >>= fun () -> Lwt.return res in
       Carton.Dec.Idx.map ~f index |> Lwt.join >>= Lwt.pause
     in
     let map pck_contents ~pos len =
