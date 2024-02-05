@@ -330,7 +330,12 @@ module Make (Digestif : Digestif.S) = struct
     in
     let iter index ~f =
       let f (uid, offset) = f uid offset in
-      let f ~uid ~offset ~crc:_ = Lwt.apply f (uid, offset) in
+      (* XXX(dinosaure): when the pack is huge, we must give a pause
+         for each entry because our [batch_write] tries to extract all
+         objects the second time. *)
+      let f ~uid ~offset ~crc:_ =
+        Lwt.apply f (uid, offset) >>= fun res ->
+        Lwt.pause () >>= Lwt.return res in
       Carton.Dec.Idx.map ~f index |> Lwt.join >>= Lwt.pause
     in
     let map pck_contents ~pos len =
