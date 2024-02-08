@@ -261,14 +261,16 @@ module Make (Digestif : Digestif.S) = struct
     Lwt.return v
 
   let read_exn t h =
+    let open Lwt.Infix in
     match read t h with
     | Error _ -> Lwt.fail (failuref "%a not found" Hash.pp h)
-    | Ok v -> Lwt.return v
+    | Ok v -> Lwt.pause () >|= fun () -> v
 
   let read_opt t h =
+    let open Lwt.Infix in
     match read t h with
     | Error (`Not_found _) -> Lwt.return (Ok None)
-    | Ok v -> Lwt.return (Ok (Some v))
+    | Ok v -> Lwt.pause () >|= fun () -> Ok (Some v)
 
   let contents t =
     let open Lwt.Infix in
@@ -282,8 +284,9 @@ module Make (Digestif : Digestif.S) = struct
     Lwt.return res
 
   let read t h =
+    let open Lwt.Infix in
     match read t h with
-    | Ok _ as v -> Lwt.return v
+    | Ok _ as v -> Lwt.pause () >|= fun () -> v
     | Error _ as err -> Lwt.return err
 
   let is_shallowed t hash = Shallow.exists t.shallows ~equal:Hash.equal hash
@@ -304,6 +307,18 @@ module Make (Digestif : Digestif.S) = struct
 
   let fold = Traverse.fold
   let iter = Traverse.iter
+
+  let map ~f idx =
+    let open Lwt.Infix in
+    let rec go acc n =
+      if Carton.Dec.Idx.max idx == n then Lwt.return (List.rev acc)
+      else
+        let uid = Carton.Dec.Idx.get_uid idx n
+        and offset = Carton.Dec.Idx.get_offset idx n
+        and crc = Carton.Dec.Idx.get_crc idx n in
+        f ~uid ~offset ~crc >>= fun entry -> go (entry :: acc) (succ n)
+    in
+    go [] 0
 
   (* XXX(dinosaure): extraction of Git objects from a PACK file stored
      into a [Cstruct.t] is not scheduled by any blocking _syscall_. In this
@@ -333,10 +348,8 @@ module Make (Digestif : Digestif.S) = struct
       (* XXX(dinosaure): when the pack is huge, we must give a pause
          for each entry because our [batch_write] tries to extract all
          objects the second time. *)
-      let f ~uid ~offset ~crc:_ =
-        Lwt.apply f (uid, offset) >>= fun res ->
-        Lwt.pause () >>= fun () -> Lwt.return res in
-      Carton.Dec.Idx.map ~f index |> Lwt.join >>= Lwt.pause
+      let f ~uid ~offset ~crc:_ = f (uid, offset) >>= Lwt.pause in
+      map ~f index >>= fun _units -> Lwt.return_unit
     in
     let map pck_contents ~pos len =
       let pos = Int64.to_int pos in

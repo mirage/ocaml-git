@@ -183,7 +183,8 @@ module Thin = struct
 
     let with_pause f x =
       let open Lwt.Infix in
-      f x >>= fun r -> Lwt.pause () >|= fun () -> r
+      f x >>= fun r ->
+      Lwt.pause () >|= fun () -> r
 
     let canonicalize ~light_load ~heavy_load ~src ~dst fs n requireds weight =
       let light_load uid = inj (with_pause light_load uid) in
