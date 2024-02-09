@@ -27,7 +27,7 @@ depends: [
   "psq" {>= "0.2.0"}
   "fmt" {>= "0.8.9"}
   "result"
-  "rresult"
+  "rresult" {>= "0.7.0"}
   "fpath"
   "base64" {with-test & >= "3.0.0"}
   "bos"
