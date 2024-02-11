@@ -212,6 +212,7 @@ module Make (Digestif : Digestif.S) = struct
       Lwt.return hash
 
   let read_inflated t h =
+    let open Lwt.Infix in
     try
       let value = Lazy.force (Hashtbl.find t.values h) in
       let kind =
@@ -222,11 +223,11 @@ module Make (Digestif : Digestif.S) = struct
         | Tag _ -> `Tag
       in
       let raw = Value.to_raw_without_header value in
-      Lwt.return_some (kind, Cstruct.of_string raw)
+      Lwt.pause () >|= fun () -> Some (kind, Cstruct.of_string raw)
     with Not_found -> (
       try
         let kind, raw = Hashtbl.find t.inflated h in
-        Lwt.return_some (kind, raw)
+        Lwt.pause () >|= fun () -> Some (kind, raw)
       with Not_found -> Lwt.return_none)
 
   let read t h =
