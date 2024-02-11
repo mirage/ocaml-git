@@ -181,9 +181,14 @@ module Thin = struct
   module Make (Uid : Carton.UID) = struct
     include Thin.Make (Lwt_scheduler) (Lwt_io) (Uid)
 
+    let with_pause f x =
+      let open Lwt.Infix in
+      f x >>= fun r ->
+      Lwt.pause () >|= fun () -> r
+
     let canonicalize ~light_load ~heavy_load ~src ~dst fs n requireds weight =
-      let light_load uid = inj (light_load uid) in
-      let heavy_load uid = inj (heavy_load uid) in
+      let light_load uid = inj (with_pause light_load uid) in
+      let heavy_load uid = inj (with_pause heavy_load uid) in
       canonicalize ~light_load ~heavy_load ~src ~dst fs n requireds weight
   end
 end

@@ -39,7 +39,7 @@ let parallel_iter ~f lst = Lwt_list.iter_p f lst
 let detach f =
   let th, wk = Lwt.wait () in
   Lwt.async (fun () ->
+      let open Lwt.Infix in
       let res = f () in
-      Lwt.wakeup_later wk res;
-      Lwt.return_unit);
+      Lwt.pause () >|= fun () -> Lwt.wakeup_later wk res);
   th
