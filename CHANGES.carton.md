@@ -1,3 +1,7 @@
+### 0.7.1 (2024-02-12) Paris - France
+
+- Add a `Lwt.pause` to insert a cooperative point when we verify a PACK file (@dinosaure, @hannesm, #631)
+
 ### 0.7.0 (2023-09-28) Paris - France
 
 - Extend the API with the ability to choose the compression level (@dinosaure, #616)
