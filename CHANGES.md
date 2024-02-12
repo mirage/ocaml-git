@@ -1,3 +1,13 @@
+### 3.15.0 (2024-02-12) Paris - France
+
+- Update unikernels (@hannesm, #621)
+- Extend the Smart protocol with `have` and `want` (@plangesd, @dinosaure, #626)
+- Rename function to get capabilities from the client and the server (@Julow, #627)
+- Extend the Smart protocol with a possible `done` or a `flush` (@plangesd, #628)
+- Extend the Smart protocol with `ack` and handle empty request (@plangesd, @Julow, #629)
+- Add missing new lines for the server side (@plangesd, #630)
+- Be more cooperative with other services (like `http`) when we clone (@dinosaure, @hannesm, #631)
+
 ### 3.14.0 (2023-09-30) Paris - France
 
 - Fix tests with `git.2.41.0+` (@metanivek, #622)
