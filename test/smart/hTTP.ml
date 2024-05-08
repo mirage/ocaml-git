@@ -38,6 +38,8 @@ let read t =
 
 let close _ = Lwt.return_unit
 
+let shutdown _ _ = Lwt.return_unit
+
 type endpoint = string * string
 
 let connect (advertised_refs, clone) =

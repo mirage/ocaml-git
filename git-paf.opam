@@ -27,7 +27,7 @@ depends: [
   "bigstringaf"
   "domain-name"
   "httpaf"
-  "mirage-flow"
+  "mirage-flow" {>= "4.0.0"}
   "tls-mirage"
 ]
 build: [

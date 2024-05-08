@@ -46,7 +46,7 @@ depends: [
   "base-unix" {with-test}
   "fpath"
   "hxd" {>= "0.3.2"}
-  "mirage-flow" {>= "2.0.1"}
+  "mirage-flow" {>= "4.0.0"}
   "domain-name" {>= "0.3.0"}
   "emile" {>= "1.1"}
   "ipaddr" {>= "5.0.1"}

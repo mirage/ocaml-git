@@ -41,7 +41,7 @@ depends: [
   "tcpip" {>= "7.0.0"}
   "cstruct" {>= "6.0.0"}
   "awa-mirage" {>= "0.1.0"}
-  "mirage-flow" {>= "2.0.1"}
+  "mirage-flow" {>= "4.0.0"}
   "ke" {>= "0.4" & with-test}
   "mirage-crypto-rng" {>= "0.11.0" & with-test}
   "ptime"

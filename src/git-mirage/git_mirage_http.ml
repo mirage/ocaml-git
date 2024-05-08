@@ -189,6 +189,8 @@ struct
 
     let close _ = Lwt.return_unit
 
+    let shutdown _ _ = Lwt.return_unit
+
     type endpoint = Happy_eyeballs.t
 
     let connect happy_eyeballs =
