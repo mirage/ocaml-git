@@ -70,7 +70,7 @@ let safe :
  fun k decoder ->
   try k decoder
   with Leave { error = #error as error; buffer; committed } ->
-    Error { error = (error :> 'err); buffer; committed }
+    Error { error :> 'err; buffer; committed }
 
 let end_of_input decoder = decoder.max
 

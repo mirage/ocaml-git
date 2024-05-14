@@ -15,7 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) : sig
+module Make
+    (Hash : Digestif.S)
+    (Store : Minimal.S with type hash = Hash.t) : sig
   type hash = Hash.t
   type store = Store.t
 

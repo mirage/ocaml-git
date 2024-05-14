@@ -188,7 +188,6 @@ struct
               Lwt.return_error (`Msg (Fmt.str "%a" Git_paf.pp_error err)))
 
     let close _ = Lwt.return_unit
-
     let shutdown _ _ = Lwt.return_unit
 
     type endpoint = Happy_eyeballs.t

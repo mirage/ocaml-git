@@ -56,5 +56,4 @@ let writev t css =
   go css
 
 let close t = Lwt_unix.close t.ic >>= fun () -> Lwt_unix.close t.oc
-
 let shutdown t _ = close t

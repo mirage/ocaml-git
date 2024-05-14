@@ -58,7 +58,8 @@ module TCP = struct
   let close fd = Lwt_unix.close fd
 
   let shutdown fd mode =
-    let m = match mode with
+    let m =
+      match mode with
       | `read -> Lwt_unix.SHUTDOWN_RECEIVE
       | `write -> Lwt_unix.SHUTDOWN_SEND
       | `read_write -> Lwt_unix.SHUTDOWN_ALL

@@ -585,7 +585,7 @@ module Device = struct
     let file = File in
     Ephemeron.add device file (ref Bigstringaf.empty);
     file
-    [@@inline never]
+  [@@inline never]
 
   let project device file = !(Ephemeron.find device file)
 end

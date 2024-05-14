@@ -33,7 +33,7 @@ module Utils = struct
     if len land 0xff0000 <> 0 then cmd := !cmd lor 0x40;
 
     !cmd
-    [@@inline]
+  [@@inline]
 
   let length_of_copy_code ~off ~len =
     let required =
