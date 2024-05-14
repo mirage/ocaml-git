@@ -10,7 +10,6 @@
   mirage-flow
   domain-name
   bigstringaf
-  result
   lwt
   fmt
   git.nss.git

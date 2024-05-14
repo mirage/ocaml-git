@@ -1,14 +1,4 @@
 (library
  (name git_index)
  (public_name git-unix.index)
- (libraries
-  astring
-  lwt
-  rresult
-  result
-  fmt
-  digestif
-  fpath
-  bigstringaf
-  unix
-  git-unix))
+ (libraries astring lwt rresult fmt digestif fpath bigstringaf unix git-unix))

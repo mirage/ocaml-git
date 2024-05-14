@@ -8,7 +8,7 @@
  (name smart)
  (public_name git.nss.smart)
  (modules smart filter capability state protocol)
- (libraries git.nss.pkt-line result rresult ipaddr domain-name astring fmt))
+ (libraries git.nss.pkt-line rresult ipaddr domain-name astring fmt))
 
 (library
  (name sigs)
@@ -46,7 +46,6 @@
  (modules nss fetch push)
  (libraries
   fmt
-  result
   rresult
   logs
   ipaddr
@@ -61,7 +60,7 @@
  (name unixiz)
  (public_name git.nss.unixiz)
  (modules unixiz)
- (libraries git.nss.sigs lwt result rresult fmt mirage-flow ke cstruct))
+ (libraries git.nss.sigs lwt rresult fmt mirage-flow ke cstruct))
 
 (library
  (name smart_git)
@@ -78,7 +77,6 @@
   cstruct
   logs
   astring
-  result
   rresult
   bigstringaf
   fmt

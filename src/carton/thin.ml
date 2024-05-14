@@ -6,7 +6,7 @@ type optint = Optint.t
 
 let blit_from_string src src_off dst dst_off len =
   Bigstringaf.blit_from_string src ~src_off dst ~dst_off ~len
-  [@@inline]
+[@@inline]
 
 let src = Logs.Src.create "thin"
 

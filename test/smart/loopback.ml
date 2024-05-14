@@ -53,3 +53,5 @@ let close flow =
   flow.c <- true;
   flow.push flow.o;
   Lwt.return ()
+
+let shutdown flow _ = close flow

@@ -164,7 +164,7 @@ module M = struct
       ()
     done;
     !p - off, !len
-    [@@inline]
+  [@@inline]
 
   let eoi d =
     d.i <- bigstring_empty;
@@ -474,7 +474,7 @@ module N = struct
     if len land 0xff0000 <> 0 then cmd := !cmd lor 0x40;
 
     !cmd
-    [@@inline]
+  [@@inline]
 
   let t_range e max =
     e.t_pos <- 0;
@@ -573,7 +573,7 @@ module N = struct
     done;
     incr o;
     !o
-    [@@inline]
+  [@@inline]
 
   let encode_header e v =
     let k e =

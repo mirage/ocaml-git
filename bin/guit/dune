@@ -21,7 +21,6 @@
   mirage-flow
   fmt.tty
   fpath
-  result
   cmdliner
   rresult
   mimic
@@ -33,7 +32,6 @@
  (package git-unix)
  (public_name guit.v)
  (libraries
-  result
   fpath
   cmdliner
   mtime

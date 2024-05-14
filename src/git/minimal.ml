@@ -3,7 +3,8 @@ module type S = sig
   type hash
   type decode_error := [ `Msg of string ]
 
-  type error = private
+  type error =
+    private
     [> `Not_found of hash | `Reference_not_found of Reference.t | decode_error ]
 
   val pp_error : error Fmt.t

@@ -1,6 +1,18 @@
 open Rresult
 open Lwt.Infix
 
+module K = struct
+  open Cmdliner
+
+  let remote =
+    let doc = Arg.info ~doc:"Remote Git repository." ["r"; "remote"] in
+    Arg.(required & opt (some string) None doc)
+
+  let port =
+    let doc = Arg.info ~doc:"The port where to listen." [ "p"; "port" ] in
+    Arg.(value & opt int 8080 doc)
+end
+
 let ( >>? ) = Lwt_result.bind
 
 module Make
@@ -185,22 +197,22 @@ struct
       Stack.TCP.close flow >|= fun () ->
       Logs.app (fun m -> m "Got an error from %a:%d: %s." Ipaddr.pp ipaddr port err)
 
-  let server stack edn ctx git branch =
-    Stack.TCP.listen (Stack.tcp stack) ~port:(Key_gen.port ()) (callback edn ctx git branch) ;
+  let server ~port stack edn ctx git branch =
+    Stack.TCP.listen (Stack.tcp stack) ~port (callback edn ctx git branch) ;
     Stack.listen stack
 
   let failwith pp = function
     | Ok _ as v -> Lwt.return v
     | Error err -> Fmt.failwith "%a" pp err
 
-  let start stack git ctx =
-    let edn, branch = match String.split_on_char '#' (Key_gen.remote ()) with
+  let start stack git ctx remote port =
+    let edn, branch = match String.split_on_char '#' remote with
       | [ edn; branch ] ->
         Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string edn),
         Rresult.R.failwith_error_msg (Git.Reference.of_string branch)
       | _ ->
-        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string (Key_gen.remote ())),
+        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string remote),
         Git.Reference.master in
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All
-    >>= failwith Sync.pp_error >>= fun _ -> server stack edn ctx git branch
+    >>= failwith Sync.pp_error >>= fun _ -> server ~port stack edn ctx git branch
 end

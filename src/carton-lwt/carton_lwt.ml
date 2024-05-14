@@ -8,7 +8,7 @@ external prj : ('a, lwt) Carton.io -> 'a Lwt.t = "%identity"
 let lwt_bind x f =
   let open Lwt.Infix in
   inj (prj x >>= fun x -> prj (f x))
-  [@@inline]
+[@@inline]
 
 let lwt_return x = inj (Lwt.return x) [@@inline]
 let lwt = { Carton.bind = lwt_bind; Carton.return = lwt_return }

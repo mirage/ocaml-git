@@ -5,7 +5,6 @@
   lwt
   lwt.unix
   alcotest-lwt
-  result
   rresult
   fpath
   git

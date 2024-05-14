@@ -57,6 +57,16 @@ module TCP = struct
 
   let close fd = Lwt_unix.close fd
 
+  let shutdown fd mode =
+    let m =
+      match mode with
+      | `read -> Lwt_unix.SHUTDOWN_RECEIVE
+      | `write -> Lwt_unix.SHUTDOWN_SEND
+      | `read_write -> Lwt_unix.SHUTDOWN_ALL
+    in
+    Lwt_unix.shutdown fd m;
+    Lwt.return_unit
+
   type endpoint = Lwt_unix.sockaddr
 
   let connect sockaddr =
@@ -80,6 +90,7 @@ module TCP = struct
 
   let disconnect _ = assert false
   let dst _ = assert false
+  let src _ = assert false
   let write_nodelay _ _ = assert false
   let writev_nodelay _ _ = assert false
   let create_connection ?keepalive:_ _ _ = assert false
@@ -132,6 +143,11 @@ module FIFO = struct
     | x :: r -> write fd x >>? fun () -> writev fd r
 
   let close (ic, oc) = Lwt_unix.close ic >>= fun () -> Lwt_unix.close oc
+
+  let shutdown (ic, oc) = function
+    | `read -> Lwt_unix.close ic
+    | `write -> Lwt_unix.close oc
+    | `read_write -> close (ic, oc)
 
   let connect fpath =
     let process () =

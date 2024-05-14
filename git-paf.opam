@@ -20,16 +20,16 @@ depends: [
   "mirage-clock"
   "tcpip" {>= "7.0.0"}
   "mirage-time"
-  "result"
   "rresult"
   "tls" {>= "0.14.0"}
   "uri"
   "bigstringaf"
   "domain-name"
   "httpaf"
-  "mirage-flow"
+  "mirage-flow" {>= "4.0.0"}
   "tls-mirage"
 ]
+conflicts: [ "result" {< "1.5"} ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}

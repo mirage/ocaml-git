@@ -3,7 +3,6 @@
  (libraries
   lwt
   lwt.unix
-  result
   rresult
   astring
   digestif

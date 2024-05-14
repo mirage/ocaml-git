@@ -6,7 +6,6 @@
   git_version
   lwt
   lwt.unix
-  result
   rresult
   fpath
   decompress.de

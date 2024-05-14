@@ -67,3 +67,5 @@ let close { process; _ } =
   let open Lwt.Syntax in
   let+ (_ : Unix.process_status) = process#close in
   ()
+
+let shutdown t _ = close t

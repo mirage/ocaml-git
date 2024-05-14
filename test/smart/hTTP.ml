@@ -37,6 +37,7 @@ let read t =
   | Post -> Lwt.return_ok (`Data (Cstruct.of_string t.clone))
 
 let close _ = Lwt.return_unit
+let shutdown _ _ = Lwt.return_unit
 
 type endpoint = string * string
 

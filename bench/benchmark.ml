@@ -18,7 +18,7 @@ let runnable f i =
   for _ = 1 to i do
     ignore @@ Sys.opaque_identity (f ())
   done
-  [@@inline]
+[@@inline]
 
 let samples = 1000
 

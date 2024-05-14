@@ -4,7 +4,6 @@
  (public_name git.loose)
  (libraries
   fmt
-  result
   carton
   decompress.de
   decompress.zl
@@ -32,7 +31,6 @@
  (libraries
   fmt
   bigstringaf
-  result
   rresult
   fpath
   lwt

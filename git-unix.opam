@@ -13,7 +13,6 @@ depends: [
   "git-mirage" {= version}
   "happy-eyeballs-lwt" {>= "0.1.2"}
   "rresult"
-  "result"
   "bigstringaf" {>= "0.9.0"}
   "fmt" {>= "0.8.7"}
   "bos"
@@ -29,7 +28,6 @@ depends: [
   "mirage-clock" {>= "4.1.0"}
   "mirage-clock-unix" {>= "4.1.0"}
   "astring" {>= "0.8.5"}
-  "awa" {>= "0.1.0"}
   "mirage-time" {>= "2.0.0"}
   "mirage-unix" {>= "5.0.0"}
   "cmdliner" {>= "1.1.0"}
@@ -37,19 +35,15 @@ depends: [
   "domain-name" {>= "0.3.0"}
   "ipaddr" {>= "5.0.1"}
   "mtime" {>= "1.2.0"}
-  "ocamlfind" {>= "1.8.1"}
   "tcpip" {>= "7.0.0"}
   "cstruct" {>= "6.0.0"}
-  "awa-mirage" {>= "0.1.0"}
-  "mirage-flow" {>= "2.0.1"}
+  "mirage-flow" {>= "4.0.0"}
   "ke" {>= "0.4" & with-test}
   "mirage-crypto-rng" {>= "0.11.0" & with-test}
-  "ptime"
   "mimic"
-  "ca-certs-nss" {>= "3.60"}
   "tls" {>= "0.14.0"}
-  "tls-mirage" {>= "0.14.0"}
 ]
+conflicts: [ "result" {< "1.5"} ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test & os != "macos"}

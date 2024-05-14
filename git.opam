@@ -20,7 +20,6 @@ depends: [
   "digestif" {>= "1.1.2"}
   "rresult"
   "base64" {>= "3.0.0"}
-  "result"
   "bigstringaf" {>= "0.9.0"}
   "optint"
   "decompress" {>= "1.4.0"}
@@ -44,9 +43,8 @@ depends: [
   "mirage-crypto-rng" {with-test & >= "0.8.0"}
   "cmdliner" {with-test & >= "1.1.0"}
   "base-unix" {with-test}
-  "fpath"
   "hxd" {>= "0.3.2"}
-  "mirage-flow" {>= "2.0.1"}
+  "mirage-flow" {>= "4.0.0"}
   "domain-name" {>= "0.3.0"}
   "emile" {>= "1.1"}
   "ipaddr" {>= "5.0.1"}
@@ -54,6 +52,7 @@ depends: [
   "uri" {>= "4.1.0"}
   "crowbar" {>= "0.2.1" & with-test}
 ]
+conflicts: [ "result" {< "1.5"} ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
   ["dune" "runtest" "-p" name] {with-test}

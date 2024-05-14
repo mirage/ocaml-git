@@ -87,8 +87,8 @@ module Make (Hash : S.HASH) = struct
 
     let commit =
       Encore.Bij.v
-        ~fwd:
-          (fun ((_, tree), parents, (_, author), (_, committer), extra, message) ->
+        ~fwd:(fun
+            ((_, tree), parents, (_, author), (_, committer), extra, message) ->
           let parents = List.map snd parents in
           { tree; parents; author; committer; extra; message })
         ~bwd:(fun { tree; parents; author; committer; extra; message } ->
