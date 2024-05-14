@@ -1,5 +1,13 @@
 open Lwt.Infix
 
+module K = struct
+  open Cmdliner
+
+ let remote =
+    let doc = Arg.info ~doc:"Remote Git repository." ["r"; "remote"] in
+    Arg.(required & opt (some string) None doc)
+end
+
 module Make
     (Store : Git.S)
     (_ : sig end) =
@@ -49,13 +57,13 @@ struct
   let capabilities =
     [ `Side_band_64k; `Multi_ack_detailed; `Ofs_delta; `Thin_pack; `Report_status ]
 
-  let start git ctx =
-    let edn, branch = match String.split_on_char '#' (Key_gen.remote ()) with
+  let start git ctx remote =
+    let edn, branch = match String.split_on_char '#' remote with
       | [ edn; branch ] ->
         Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string edn),
         Rresult.R.failwith_error_msg (Git.Reference.of_string branch)
       | _ ->
-        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string (Key_gen.remote ())),
+        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string remote),
         Git.Reference.master in
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All
     >>= failwith Sync.pp_error >>= empty_commit branch git
