@@ -12,15 +12,9 @@
   mirage-unix
   mirage-time
   happy-eyeballs-lwt
-  ptime
-  ptime.clock.os
-  ipaddr.unix
-  ca-certs-nss
   mirage-clock
   decompress.de
-  domain-name
   tls
-  tls-mirage
   bos
   mimic
   astring
@@ -35,7 +29,6 @@
   digestif
   git
   logs
-  logs.fmt
   cstruct
   mirage-flow
   lwt

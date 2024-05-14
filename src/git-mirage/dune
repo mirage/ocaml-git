@@ -44,7 +44,6 @@
   fmt
   tls
   uri
-  hex
   x509
   mirage-crypto
   tls-mirage

@@ -44,7 +44,6 @@ depends: [
   "mirage-crypto-rng" {with-test & >= "0.8.0"}
   "cmdliner" {with-test & >= "1.1.0"}
   "base-unix" {with-test}
-  "fpath"
   "hxd" {>= "0.3.2"}
   "mirage-flow" {>= "4.0.0"}
   "domain-name" {>= "0.3.0"}

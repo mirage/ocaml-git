@@ -21,7 +21,6 @@ depends: [
   "tls"
   "tls-mirage"
   "uri"
-  "hex"
   "happy-eyeballs-mirage" {>= "0.1.2"}
   "happy-eyeballs" {>= "0.1.2"}
   "ca-certs-nss"
@@ -36,7 +35,6 @@ depends: [
   "lwt" {>= "5.3.0"}
   "mirage-clock" {>= "3.1.0"}
   "mirage-flow" {>= "4.0.0"}
-  "mirage-random" {>= "2.0.0"}
   "mirage-time" {>= "2.0.1"}
   "result" {>= "1.5"}
   "rresult" {>= "0.6.0"}

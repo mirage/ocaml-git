@@ -38,7 +38,6 @@ depends: [
   "crowbar" {with-test & >= "0.2.1"}
   "alcotest-lwt" {>= "1.2.3" & with-test}
   "lwt" {>= "5.3.0" & with-test}
-  "ocamlfind" {>= "1.8.1" & with-test}
   "mirage-flow" {>= "2.0.1" & with-test}
 ]
 build: [
