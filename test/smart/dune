@@ -22,7 +22,6 @@
   git.nss.unixiz
   git
   git-unix
-  result
   mirage-crypto-rng
   mirage-crypto-rng.unix
   digestif

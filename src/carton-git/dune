@@ -10,7 +10,6 @@
  (modules carton_git_unix)
  (libraries
   astring
-  result
   bigstringaf
   fmt
   lwt

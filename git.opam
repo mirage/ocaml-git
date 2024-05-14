@@ -20,7 +20,6 @@ depends: [
   "digestif" {>= "1.1.2"}
   "rresult"
   "base64" {>= "3.0.0"}
-  "result"
   "bigstringaf" {>= "0.9.0"}
   "optint"
   "decompress" {>= "1.4.0"}
@@ -53,6 +52,7 @@ depends: [
   "uri" {>= "4.1.0"}
   "crowbar" {>= "0.2.1" & with-test}
 ]
+conflicts: [ "result" {< "1.5"} ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
   ["dune" "runtest" "-p" name] {with-test}

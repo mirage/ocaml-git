@@ -6,7 +6,6 @@
  (libraries
   cmdliner
   bos
-  result
   rresult
   fpath
   decompress.de
@@ -29,7 +28,6 @@
   carton.thin
   cmdliner
   bos
-  result
   rresult
   fpath
   ke
@@ -54,7 +52,6 @@
   hxd_cmdliner
   cmdliner
   bos
-  result
   rresult
   fpath
   decompress.de
@@ -69,4 +66,4 @@
 (library
  (name hxd_cmdliner)
  (modules hxd_cmdliner)
- (libraries fmt result rresult hxd.core cmdliner))
+ (libraries fmt rresult hxd.core cmdliner))

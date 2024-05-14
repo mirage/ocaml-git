@@ -8,7 +8,6 @@
   mimic
   lwt
   fmt
-  result
   tcpip
   mirage-flow
   mirage-time
@@ -20,15 +19,7 @@
  (name git_mirage_tcp)
  (modules git_mirage_tcp)
  (public_name git-mirage.tcp)
- (libraries
-  mimic-happy-eyeballs
-  git.nss.git
-  mimic
-  lwt
-  fmt
-  result
-  tcpip
-  mirage-flow))
+ (libraries mimic-happy-eyeballs git.nss.git mimic lwt fmt tcpip mirage-flow))
 
 (library
  (name git_mirage_http)
@@ -49,7 +40,6 @@
   tls-mirage
   ptime
   cstruct
-  result
   ca-certs-nss
   domain-name
   tcpip

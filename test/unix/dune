@@ -8,7 +8,6 @@
   digestif
   cmdliner
   rresult
-  result
   alcotest
   fpath
   lwt

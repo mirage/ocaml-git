@@ -19,7 +19,6 @@ depends: [
   "bigstringaf" {>= "0.9.0"}
   "lwt"
   "fpath"
-  "result"
   "fmt" {>= "0.8.9"}
   "base-unix"
   "decompress" {>= "1.4.3"}
@@ -32,6 +31,7 @@ depends: [
   "rresult" {>= "0.6.0" & with-test}
   "ke" {>= "0.6" & with-test}
 ]
+conflicts: [ "result" {< "1.5"} ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
   ["dune" "runtest" "-p" name "-j" jobs] {with-test}

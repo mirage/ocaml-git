@@ -36,7 +36,6 @@ depends: [
   "mirage-clock" {>= "3.1.0"}
   "mirage-flow" {>= "4.0.0"}
   "mirage-time" {>= "2.0.1"}
-  "result" {>= "1.5"}
   "rresult" {>= "0.6.0"}
   "alcotest" {>= "1.2.3" & with-test}
   "alcotest-lwt" {>= "1.2.3" & with-test}
@@ -45,6 +44,7 @@ depends: [
   "logs" {>= "0.7.0" & with-test}
   "ke" {>= "0.4" & with-test}
 ]
+conflicts: [ "result" {< "1.5"} ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
