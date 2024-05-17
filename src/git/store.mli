@@ -18,10 +18,10 @@
 (** Implementation of a Git stores.
 
     This implementation is more complete than the memory back-end because
-    firstly, Git was think to be use on a file-system. Then, because for each
-    operations, we let the client to control the memory consumption.
+    firstly, Git was designed to be used on a file-system. Then, because for
+    each operation, we let the client to control the memory consumption.
 
-    So we provide a more powerful API which let the user to notice aready
+    So we provide a more powerful API which let the user to use already
     allocated buffers outside this scope and process some I/O operations on
     pools. *)
 
