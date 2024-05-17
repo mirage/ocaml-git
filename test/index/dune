@@ -13,6 +13,7 @@
   fpath
   bos
   rresult
+  unix
   git
   git-unix
   git-unix.index

@@ -39,4 +39,5 @@
   carton
   carton-lwt
   cstruct
+  unix
   loose_lwt))
