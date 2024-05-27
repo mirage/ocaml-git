@@ -1,8 +1,0 @@
-(cram
- (package carton)
- (deps
-  ../carton/bomb.pack
-  ../carton/bomb.idx
-  %{bin:carton.get}
-  %{bin:carton.verify-pack}
-  %{bin:carton.index-pack}))

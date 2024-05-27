@@ -1,3 +1,9 @@
+### 3.16.0 (2024-05-17) Paris - France
+
+- Adapt `ocaml-git` to `mirage-flow.4.0.0` (@hannesm, #634)
+- Improve the documentation (@Leonidas-from-XIV, #635)
+- Explicitely add `unix` as a dependency of some ocaml-git's targets (@dinosaure, b2288c2)
+
 ### 3.15.0 (2024-02-12) Paris - France
 
 - Update unikernels (@hannesm, #621)

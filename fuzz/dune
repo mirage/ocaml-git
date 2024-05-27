@@ -15,18 +15,6 @@
 
 (rule
  (alias runtest)
- (package carton)
- (action
-  (run ./pack_headers.exe)))
-
-(rule
- (alias runtest)
- (package carton)
- (action
-  (run ./binary_search.exe)))
-
-(rule
- (alias runtest)
  (package git)
  (action
   (run ./smart.exe)))
