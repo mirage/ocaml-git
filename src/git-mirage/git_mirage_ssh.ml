@@ -150,14 +150,20 @@ struct
     let key = Option.map Awa.Keys.of_string key in
     let ctx =
       match authenticator with
-      | Some (Error err) -> failwith err
+      | Some (Error err) ->
+        print_endline ("[git-mirage-ssh] authenticator error: " ^ err);
+        exit 64
       | Some (Ok authenticator) ->
           Mimic.add git_mirage_ssh_authenticator authenticator ctx
       | None -> ctx
     in
     match key, password with
-    | Some (Error (`Msg err)), _ -> failwith err
-    | Some _, Some _ -> failwith "both key and password provided"
+    | Some (Error (`Msg err)), _ ->
+      print_endline ("[git-mirage-ssh] ssh key error: " ^ err);
+      exit 64
+    | Some _, Some _ ->
+      print_endline "[git-mirage-ssh] both key and password provided";
+      exit 64
     | Some (Ok key), None ->
         let ctx = Mimic.add git_mirage_ssh_key key ctx in
         Lwt.return ctx
