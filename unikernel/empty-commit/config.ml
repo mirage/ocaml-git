@@ -47,25 +47,25 @@ let git path hash = git_impl path $ hash
 (* User space *)
 
 let ssh_key =
-  Runtime_arg.create ~pos:__POS__ ~name:"ssh_key"
+  Runtime_arg.create ~pos:__POS__
     {|let open Cmdliner in
       let doc = Arg.info ~doc:"The private SSH key (rsa:<seed> or ed25519:<b64-key>)." ["ssh-key"] in
       Arg.(value & opt (some string) None doc)|}
 
 let ssh_password =
-  Runtime_arg.create ~pos:__POS__ ~name:"ssh_password"
+  Runtime_arg.create ~pos:__POS__
     {|let open Cmdliner in
      let doc = Arg.info ~doc:"The private SSH password." [ "ssh-password" ] in
       Arg.(value & opt (some string) None doc)|}
 
 let ssh_authenticator =
-  Runtime_arg.create ~pos:__POS__ ~name:"ssh_authenticator"
+  Runtime_arg.create ~pos:__POS__
     {|let open Cmdliner in
      let doc = Arg.info ~doc:"SSH public key of the remote Git repository." ["ssh-authenticator"] in
       Arg.(value & opt (some string) None doc)|}
 
 let https_authenticator =
-  Runtime_arg.create ~pos:__POS__ ~name:"tls_authenticator"
+  Runtime_arg.create ~pos:__POS__
     {|let open Cmdliner in
      let doc = Arg.info ~doc:"TLS authenticator of the remote Git repository." [ "https-authenticator" ] in
      Arg.(value & opt (some string) None doc)|}
