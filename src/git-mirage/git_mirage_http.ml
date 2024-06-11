@@ -269,11 +269,15 @@ struct
       | None -> (
           match NSS.authenticator () with
           | Ok authenticator -> authenticator
-          | Error (`Msg err) -> failwith err)
+          | Error (`Msg err) ->
+            print_endline ("[git-mirage-http] NSS authenticator error: " ^ err);
+            exit 64)
       | Some str -> (
           match X509.Authenticator.of_string str with
           | Ok auth -> auth time
-          | Error (`Msg msg) -> failwith msg)
+          | Error (`Msg msg) ->
+            print_endline ("[git-mirage-http] authenticator error: " ^ msg);
+            exit 64)
     in
     let tls = Tls.Config.client ~authenticator () in
     let ctx = Mimic.add git_mirage_http_tls_config tls ctx in
