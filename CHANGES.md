@@ -1,3 +1,8 @@
+### 3.16.1 (2024-06-11) Takaoka - Japon
+
+- Fix the compilation of `git-unix` with `mimic-happy-eyeballs.0.0.8` (@dinosaure, #642)
+- Print out errors when we got an error on unikernels (@hannesm, #641)
+
 ### 3.16.0 (2024-05-17) Paris - France
 
 - Adapt `ocaml-git` to `mirage-flow.4.0.0` (@hannesm, #634)
