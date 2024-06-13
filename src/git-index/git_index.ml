@@ -132,11 +132,19 @@ module Entry = struct
     | Unix.S_SOCK -> Fmt.invalid_arg "Git does not handle socket"
 
   let oid_of_blob :
-      type oid. hash:oid hash -> Fpath.t -> (oid, [> Rresult.R.msg ]) result =
-   fun ~hash path ->
+      type oid.
+      hash:oid hash ->
+      ?root:Fpath.t ->
+      Fpath.t ->
+      (oid, [> Rresult.R.msg ]) result =
+   fun ~hash ?root path ->
     let module Hash = (val module_of hash) in
     try
-      let ic = open_in_bin (Fpath.to_string path) in
+      let ic =
+        match root with
+        | Some root -> open_in_bin Fpath.(to_string (root // path))
+        | None -> open_in_bin (Fpath.to_string path)
+      in
       let tmp = Bytes.create io_buffer_size in
       let ctx = Hash.empty in
       let rec go ctx =
@@ -155,10 +163,19 @@ module Entry = struct
       Rresult.R.error_msgf "%a: %s" Fpath.pp path (Printexc.to_string exn)
 
   let oid_of_link :
-      type oid. hash:oid hash -> Fpath.t -> (oid, [> Rresult.R.msg ]) result =
-   fun ~hash path ->
+      type oid.
+      hash:oid hash ->
+      ?root:Fpath.t ->
+      Fpath.t ->
+      (oid, [> Rresult.R.msg ]) result =
+   fun ~hash ?root path ->
     let module Hash = (val module_of hash) in
-    let contents = Unix.readlink (Fpath.to_string path) in
+    let contents =
+      let path =
+        match root with Some root -> Fpath.(root // path) | None -> path
+      in
+      Unix.readlink (Fpath.to_string path)
+    in
     let contents =
       Astring.String.map (function '\\' -> '/' | c -> c) contents
     in
@@ -169,7 +186,7 @@ module Entry = struct
     in
     Rresult.R.ok (Hash.get ctx)
 
-  let make ~hash path =
+  let make ~hash ?root path =
     try
       let stat = Unix.lstat (Fpath.to_string path) in
       let ctime_nsec, ctime_sec = Float.modf stat.Unix.st_ctime in
@@ -181,8 +198,8 @@ module Entry = struct
       let open Rresult in
       (match stat.Unix.st_kind with
       | Unix.S_DIR -> Fmt.invalid_arg "Git sub-module are not implemented"
-      | Unix.S_REG -> oid_of_blob ~hash path
-      | Unix.S_LNK -> oid_of_link ~hash path
+      | Unix.S_REG -> oid_of_blob ~hash ?root path
+      | Unix.S_LNK -> oid_of_link ~hash ?root path
       | _kind -> Fmt.invalid_arg "Invalid kind")
       >>| fun oid ->
       {
@@ -430,7 +447,11 @@ module Entry = struct
         ]
 end
 
-type 'oid t = { mutable entries : 'oid Entry.t array; version : int }
+type 'oid t = {
+  mutable entries : 'oid Entry.t array;
+  root : Fpath.t;
+  version : int;
+}
 
 let empty_index_file :
     type oid. version:int -> hash:oid hash -> Bigstringaf.t * oid =
@@ -446,10 +467,11 @@ let empty_index_file :
     ~len:Hash.digest_size;
   res, Hash.of_raw_string hash
 
-let make : type oid. ?version:int -> oid hash -> oid t =
- fun ?(version = 2) _ -> { entries = [||]; version }
+let make : type oid. ?version:int -> oid hash -> root:Fpath.t -> oid t =
+ fun ?(version = 2) _ ~root -> { entries = [||]; root; version }
 
 let exists t path =
+  let path = Option.value ~default:path (Fpath.relativize ~root:t.root path) in
   let rec go n =
     if n >= Array.length t.entries then false
     else if Fpath.equal t.entries.(n).name path then true
@@ -458,6 +480,7 @@ let exists t path =
   go 0
 
 let find t path =
+  let path = Option.value ~default:path (Fpath.relativize ~root:t.root path) in
   let rec go n =
     if n >= Array.length t.entries then None
     else if Fpath.equal t.entries.(n).name path then Some t.entries.(n)
@@ -466,6 +489,7 @@ let find t path =
   go 0
 
 let pos_of_entry t path =
+  let path = Option.value ~default:path (Fpath.relativize ~root:t.root path) in
   let rec go first last =
     if last > first then
       let next = first + ((last - first) lsr 1) in
@@ -500,8 +524,9 @@ let add :
     type oid.
     hash:oid hash -> Fpath.t -> oid t -> (unit, [> Rresult.R.msg ]) result =
  fun ~hash path t ->
+  let path = Option.value ~default:path (Fpath.relativize ~root:t.root path) in
   let open Rresult in
-  Entry.make ~hash path >>= fun entry ->
+  Entry.make ~hash ~root:t.root path >>= fun entry ->
   (* entry.ce_flags <- entry.ce_flags lor Entry._ce_intent_to_add ;
      XXX(dinosaure): [CE_INTENT_TO_ADD] adds [M] into [git status --porcelain] *)
   match find t path with
@@ -528,6 +553,7 @@ let add :
 
 let rem : Fpath.t -> 'oid t -> unit =
  fun path t ->
+  let path = Option.value ~default:path (Fpath.relativize ~root:t.root path) in
   let pos = pos_of_entry t path in
   let pos = if pos < 0 then -pos - 1 else pos in
   let rec go pos =
@@ -708,8 +734,12 @@ let load_extension ~off buffer =
   | ext -> Fmt.invalid_arg "Invalid or unsupported extension: %08lx" ext
 
 let load :
-    type oid. hash:oid hash -> Fpath.t -> (oid t, [> Rresult.R.msg ]) result =
- fun ~hash path ->
+    type oid.
+    hash:oid hash ->
+    root:Fpath.t ->
+    Fpath.t ->
+    (oid t, [> Rresult.R.msg ]) result =
+ fun ~hash ~root path ->
   let open Rresult in
   let module Hash = (val module_of hash) in
   let load path =
@@ -752,7 +782,8 @@ let load :
     let len = Hash.digest_size in
     Hash.of_raw_string (Bigstringaf.substring mmap ~off ~len)
   in
-  if Hash.equal oid0 oid1 then R.ok { entries = Array.of_list entries; version }
+  if Hash.equal oid0 oid1 then
+    R.ok { entries = Array.of_list entries; root; version }
   else R.error_msgf "Invalid hash (%a <> %a)" Hash.pp oid0 Hash.pp oid1
 
 let store :
