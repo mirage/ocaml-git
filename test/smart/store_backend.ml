@@ -338,11 +338,8 @@ let deref :
       Log.err (fun m -> m "Got an error [deref]: %a" R.pp_msg err);
       failwithf "%a" R.pp_msg err
 
-let locals :
-    type s.
-    s scheduler ->
-    (Uid.t, Uid.t * int ref * int64, git) store ->
-    (Ref.t list, s) io =
+let locals : type s. s scheduler -> (Uid.t, _, git) store -> (Ref.t list, s) io
+    =
  fun { Sigs.return; _ } store ->
   let { path; _ } = Store.prj store in
   let fiber =
