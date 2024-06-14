@@ -109,16 +109,16 @@ let response_handler mvar pusher resp body =
   let rec on_read buf ~off ~len =
     let str = Bigstringaf.substring buf ~off ~len in
     pusher (Some str);
-    Httpaf.Body.schedule_read ~on_eof ~on_read body
+    Httpaf.Body.Reader.schedule_read ~on_eof ~on_read body
   in
-  Httpaf.Body.schedule_read ~on_eof ~on_read body;
+  Httpaf.Body.Reader.schedule_read ~on_eof ~on_read body;
   Lwt.async @@ fun () -> Lwt_mvar.put mvar resp
 
 let transmit body = function
-  | None -> Httpaf.Body.close_writer body
+  | None -> Httpaf.Body.Writer.close body
   | Some str ->
-      Httpaf.Body.write_string body str;
-      Httpaf.Body.close_writer body
+      Httpaf.Body.Writer.write_string body str;
+      Httpaf.Body.Writer.close body
 
 exception Invalid_response_body_length of Httpaf.Response.t
 exception Malformed_response of string
