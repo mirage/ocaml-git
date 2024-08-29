@@ -8,9 +8,11 @@ module Happy_eyeballs = struct
 
   let happy_eyeballs = Mimic.make ~name:"happy-eyeballs-lwt"
 
-  let resolve t ?aaaa_timeout ?connect_delay ?connect_timeout ?resolve_timeout ?resolve_retries addr ports =
-    Happy_eyeballs_lwt.connect ?aaaa_timeout ?connect_delay ?connect_timeout ?resolve_timeout ?resolve_retries
-      t addr ports >|= Rresult.R.open_error_msg
+  let resolve t ?aaaa_timeout ?connect_delay ?connect_timeout ?resolve_timeout
+      ?resolve_retries addr ports =
+    Happy_eyeballs_lwt.connect ?aaaa_timeout ?connect_delay ?connect_timeout
+      ?resolve_timeout ?resolve_retries t addr ports
+    >|= Rresult.R.open_error_msg
 end
 
 module TCP = struct
