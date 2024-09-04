@@ -85,7 +85,7 @@ let format =
   Encore.Bij.(compose obj4) user
   <$> (chop
       <$> (while1 is_not_lt <* (Encore.Bij.char '<' <$> any))
-      <*> (while1 is_not_gt <* (Encore.Bij.string "> " <$> const "> "))
+      <*> (while0 is_not_gt <* (Encore.Bij.string "> " <$> const "> "))
       <*> (int64 <$> while1 is_digit <* (Encore.Bij.char ' ' <$> any))
       <*> date)
 
