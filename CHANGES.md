@@ -1,3 +1,9 @@
+### 3.17.0 (2024-09-04) Berlin - Germany
+
+- Fix the way to decode an empty user in commits (@dinosaure, #645 -
+  reported by @kopecs #639)
+- Update to TLS 1.0.0 and mirage-crypto 1.0.0 API (@hannesm, #646)
+
 ### 3.16.1 (2024-06-11) Takaoka - Japon
 
 - Fix the compilation of `git-unix` with `mimic-happy-eyeballs.0.0.8` (@dinosaure, #642)
