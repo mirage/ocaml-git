@@ -141,7 +141,7 @@ struct
           headers : (string * string) list;
           ctx : Mimic.ctx;
         }
-      | Error
+      | Error of [ `Git_paf of Git_paf.error ]
 
     type flow = { happy_eyeballs : Happy_eyeballs.t; mutable state : state }
     type error = [ `Msg of string ]
@@ -157,7 +157,7 @@ struct
       match t.state with
       | Handshake | Get _ ->
           Lwt.return_error (`Msg "Handshake has not been done")
-      | Error -> Lwt.return_error (`Msg "Handshake got an error")
+      | Error `Git_paf e -> Lwt.return_error (`Msg (Fmt.str "Handshake got an error: git-paf: %a" Git_paf.pp_error e))
       | Post ({ output; _ } as v) ->
           let output = output ^ Cstruct.to_string cs in
           v.output <- output;
@@ -176,7 +176,7 @@ struct
     let read t =
       match t.state with
       | Handshake -> Lwt.return_error (`Msg "Handshake has not been done")
-      | Error -> Lwt.return_error (`Msg "Handshake got an error")
+      | Error `Git_paf e -> Lwt.return_error (`Msg (Fmt.str "Handshake got an error: git-paf: %a" Git_paf.pp_error e))
       | Get { advertised_refs; uri; headers; ctx } ->
           t.state <- Post { output = ""; uri; headers; ctx };
           Lwt.return_ok (`Data (Cstruct.of_string advertised_refs))
@@ -227,8 +227,8 @@ struct
                     flow.state <-
                       HTTP.Get { advertised_refs; uri = uri1; headers; ctx };
                     Lwt.return_unit
-                | Error _ ->
-                    flow.state <- Error;
+                | Error e ->
+                    flow.state <- Error (`Git_paf e);
                     Lwt.return_unit)
             | _ -> Lwt.return_unit
           in
