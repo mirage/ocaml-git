@@ -747,3 +747,5 @@ module Sync (Git_store : Git.S) = struct
   let push ~ctx edn store ?version ?capabilities cmds =
     push ~ctx edn store ?version ?capabilities cmds
 end
+
+let std_in_out_ctx = Git_unix_mimic.std_in_out_ctx

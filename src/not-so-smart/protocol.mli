@@ -82,6 +82,7 @@ module Have : sig
   type 'uid t = private 'uid list * [ `Done | `Flush ]
 
   val have : cmd:[ `Done | `Flush ] -> 'uid list -> 'uid t
+  val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
 module Result : sig
@@ -96,11 +97,11 @@ module Negotiation : sig
     | ACK_continue of 'uid
     | ACK_ready of 'uid
     | ACK_common of 'uid
-    | NAK
 
+  val mk_ack : 'uid -> 'uid t
+  val mk_continue : 'uid -> 'uid t
   val is_common : 'uid t -> bool
   val is_ready : 'uid t -> bool
-  val is_nak : 'uid t -> bool
   val pp : string t Fmt.t
   val map : f:('a -> 'b) -> 'a t -> 'b t
 end
@@ -197,7 +198,9 @@ module Decoder : sig
       [> error ] )
     state
 
-  val decode_negotiation : decoder -> (string Negotiation.t, [> error ]) state
+  val decode_negotiation :
+    decoder -> ([ `ACK of string Negotiation.t | `NAK ], [> error ]) state
+
   val decode_shallows : decoder -> (string Shallow.t list, [> error ]) state
   val decode_flush : decoder -> (unit, [> error ]) state
 

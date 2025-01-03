@@ -90,6 +90,7 @@ module Have : sig
   type 'uid t = private 'uid list * [ `Done | `Flush ]
 
   val have : cmd:[ `Done | `Flush ] -> 'uid list -> 'uid t
+  val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
 module Result : sig
@@ -104,11 +105,11 @@ module Negotiation : sig
     | ACK_continue of 'uid
     | ACK_ready of 'uid
     | ACK_common of 'uid
-    | NAK
 
+  val mk_ack : 'uid -> 'uid t
+  val mk_continue : 'uid -> 'uid t
   val is_common : 'uid t -> bool
   val is_ready : 'uid t -> bool
-  val is_nak : 'uid t -> bool
   val pp : string t Fmt.t
   val map : f:('a -> 'b) -> 'a t -> 'b t
 end
@@ -245,7 +246,7 @@ val recv_pack :
 val recv_flush : unit recv
 val recv_commands : (string, string) Commands.t option recv
 val send_acks : string Negotiation.t list send
-val recv_ack : string Negotiation.t recv
+val recv_ack : [ `ACK of string Negotiation.t | `NAK ] recv
 val shallows : string Shallow.t list recv
 val status : bool -> string Status.t recv
 val packet : trim:bool -> string recv
