@@ -10,8 +10,7 @@
   fmt
   tcpip
   mirage-flow
-  mirage-time
-  mirage-clock
+  mirage-sleep
   awa
   awa-mirage))
 
@@ -44,5 +43,4 @@
   domain-name
   tcpip
   mirage-flow
-  mirage-time
-  mirage-clock))
+  mirage-ptime))

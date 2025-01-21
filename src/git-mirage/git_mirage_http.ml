@@ -16,7 +16,6 @@ let git_mirage_http_headers = Mimic.make ~name:"git-mirage-http-headers"
 let git_mirage_http_tls_config = Mimic.make ~name:"git-mirage-tls-config"
 
 module Make
-    (Pclock : Mirage_clock.PCLOCK)
     (TCP : Tcpip.Tcp.S)
     (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S =
 struct
@@ -260,14 +259,12 @@ struct
     in
     Lwt.return ctx
 
-  module NSS = Ca_certs_nss.Make (Pclock)
-
   let with_optional_tls_config_and_headers ?headers ?authenticator ctx =
-    let time () = Some (Ptime.v (Pclock.now_d_ps ())) in
+    let time () = Some (Mirage_ptime.now ()) in
     let authenticator =
       match authenticator with
       | None -> (
-          match NSS.authenticator () with
+          match Ca_certs_nss.authenticator () with
           | Ok authenticator -> authenticator
           | Error (`Msg err) ->
               print_endline ("[git-mirage-http] NSS authenticator error: " ^ err);
