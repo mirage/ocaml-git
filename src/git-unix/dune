@@ -9,7 +9,6 @@
   git-mirage.ssh
   git-mirage.http
   happy-eyeballs-lwt
-  mirage-clock
   decompress.de
   tls
   bos

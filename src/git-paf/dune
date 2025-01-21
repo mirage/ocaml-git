@@ -4,8 +4,6 @@
  (libraries
   logs
   uri
-  mirage-time
-  mirage-clock
   tcpip
   mirage-flow
   domain-name
