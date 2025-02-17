@@ -8,11 +8,7 @@
   git-mirage.tcp
   git-mirage.ssh
   git-mirage.http
-  mirage-clock-unix
-  mirage-unix
-  mirage-time
   happy-eyeballs-lwt
-  mirage-clock
   decompress.de
   tls
   bos

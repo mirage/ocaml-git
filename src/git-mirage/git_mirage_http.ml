@@ -16,7 +16,6 @@ let git_mirage_http_headers = Mimic.make ~name:"git-mirage-http-headers"
 let git_mirage_http_tls_config = Mimic.make ~name:"git-mirage-tls-config"
 
 module Make
-    (Pclock : Mirage_clock.PCLOCK)
     (TCP : Tcpip.Tcp.S)
     (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S =
 struct
@@ -157,7 +156,10 @@ struct
       match t.state with
       | Handshake | Get _ ->
           Lwt.return_error (`Msg "Handshake has not been done")
-      | Error `Git_paf e -> Lwt.return_error (`Msg (Fmt.str "Handshake got an error: git-paf: %a" Git_paf.pp_error e))
+      | Error (`Git_paf e) ->
+          Lwt.return_error
+            (`Msg
+              (Fmt.str "Handshake got an error: git-paf: %a" Git_paf.pp_error e))
       | Post ({ output; _ } as v) ->
           let output = output ^ Cstruct.to_string cs in
           v.output <- output;
@@ -176,7 +178,10 @@ struct
     let read t =
       match t.state with
       | Handshake -> Lwt.return_error (`Msg "Handshake has not been done")
-      | Error `Git_paf e -> Lwt.return_error (`Msg (Fmt.str "Handshake got an error: git-paf: %a" Git_paf.pp_error e))
+      | Error (`Git_paf e) ->
+          Lwt.return_error
+            (`Msg
+              (Fmt.str "Handshake got an error: git-paf: %a" Git_paf.pp_error e))
       | Get { advertised_refs; uri; headers; ctx } ->
           t.state <- Post { output = ""; uri; headers; ctx };
           Lwt.return_ok (`Data (Cstruct.of_string advertised_refs))
@@ -260,14 +265,12 @@ struct
     in
     Lwt.return ctx
 
-  module NSS = Ca_certs_nss.Make (Pclock)
-
   let with_optional_tls_config_and_headers ?headers ?authenticator ctx =
-    let time () = Some (Ptime.v (Pclock.now_d_ps ())) in
+    let time () = Some (Mirage_ptime.now ()) in
     let authenticator =
       match authenticator with
       | None -> (
-          match NSS.authenticator () with
+          match Ca_certs_nss.authenticator () with
           | Ok authenticator -> authenticator
           | Error (`Msg err) ->
               print_endline ("[git-mirage-http] NSS authenticator error: " ^ err);

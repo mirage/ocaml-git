@@ -26,11 +26,7 @@ depends: [
   "alcotest" {with-test & >= "1.1.0"}
   "alcotest-lwt" {with-test & >= "1.1.0"}
   "base64" {with-test & >= "3.0.0"}
-  "mirage-clock" {>= "4.1.0"}
-  "mirage-clock-unix" {>= "4.1.0"}
   "astring" {>= "0.8.5"}
-  "mirage-time" {>= "2.0.0"}
-  "mirage-unix" {>= "5.0.0"}
   "cmdliner" {>= "1.1.0"}
   "decompress" {>= "1.4.0"}
   "domain-name" {>= "0.3.0"}
@@ -40,7 +36,7 @@ depends: [
   "cstruct" {>= "6.0.0"}
   "mirage-flow" {>= "4.0.0"}
   "ke" {>= "0.4" & with-test}
-  "mirage-crypto-rng" {>= "1.0.0" & with-test}
+  "mirage-crypto-rng" {>= "1.2.0" & with-test}
   "mimic" {>= "0.0.8"}
   "tls" {>= "1.0.0"}
 ]
