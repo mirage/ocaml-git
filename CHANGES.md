@@ -1,3 +1,9 @@
+### 3.18.0 (2025-02-17) Paris - France
+
+- Show error message when the HTTP/Git handshake has an error (@reynir, #647)
+- Add `x-maintenance-intent` (@hannesm, #648)
+- De-functorize `ocaml-git` (@hannesm, #650)
+
 ### 3.17.0 (2024-09-04) Berlin - Germany
 
 - Fix the way to decode an empty user in commits (@dinosaure, #645 -

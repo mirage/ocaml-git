@@ -45,18 +45,18 @@ let with_host headers uri =
         | Some port -> Fmt.str "%s:%d" hostname port
         | None -> hostname
       in
-      Httpaf.Headers.add_unless_exists headers "host" hostname
+      H1.Headers.add_unless_exists headers "host" hostname
 
 let with_transfer_encoding ~chunked (meth : [ `GET | `POST ]) body headers =
-  match meth, chunked, body, Httpaf.Headers.get headers "content-length" with
+  match meth, chunked, body, H1.Headers.get headers "content-length" with
   | `GET, _, _, _ -> headers
   | _, (None | Some false), _, Some _ -> headers
   | _, Some true, _, (Some _ | None) | _, None, Some _, None ->
-      Httpaf.Headers.add_unless_exists headers "transfer-encoding" "chunked"
+      H1.Headers.add_unless_exists headers "transfer-encoding" "chunked"
   | _, (None | Some false), None, None ->
-      Httpaf.Headers.add_unless_exists headers "content-length" "0"
+      H1.Headers.add_unless_exists headers "content-length" "0"
   | _, _, Some str, None ->
-      Httpaf.Headers.add_unless_exists headers "content-length"
+      H1.Headers.add_unless_exists headers "content-length"
         (string_of_int (String.length str))
 
 type error = exn
@@ -68,12 +68,12 @@ let with_redirects ?(max = 10) ~f uri =
   let tbl = Hashtbl.create 0x10 in
   let rec go max uri =
     f uri >>= fun (resp, body) ->
-    let status_code = Httpaf.Status.to_code resp.Httpaf.Response.status in
+    let status_code = H1.Status.to_code resp.H1.Response.status in
     if status_code / 100 = 3 then (
       Log.debug (fun m -> m "The request must be redirected.");
       match
         Option.map Uri.of_string
-          Httpaf.(Headers.get resp.Response.headers "location")
+          H1.(Headers.get resp.Response.headers "location")
       with
       | Some uri' when Hashtbl.mem tbl uri' || max = 0 ->
           Log.warn (fun m ->
@@ -93,13 +93,16 @@ let with_redirects ?(max = 10) ~f uri =
   in
   go max uri
 
-module Httpaf_Client_connection = struct
-  include Httpaf.Client_connection
+module H1_Client_connection = struct
+  include H1.Client_connection
 
   let yield_reader _ = assert false
 
   let next_read_operation t =
-    (next_read_operation t :> [ `Close | `Read | `Yield ])
+    (next_read_operation t :> [ `Close | `Read | `Yield | `Upgrade ])
+
+  let next_write_operation t =
+    (next_write_operation t :> [ `Close of int | `Write of Bigstringaf.t H1.IOVec.t list | `Yield | `Upgrade ])
 end
 
 let error_handler mvar err = Lwt.async @@ fun () -> Lwt_mvar.put mvar err
@@ -109,28 +112,28 @@ let response_handler mvar pusher resp body =
   let rec on_read buf ~off ~len =
     let str = Bigstringaf.substring buf ~off ~len in
     pusher (Some str);
-    Httpaf.Body.schedule_read ~on_eof ~on_read body
+    H1.Body.Reader.schedule_read ~on_eof ~on_read body
   in
-  Httpaf.Body.schedule_read ~on_eof ~on_read body;
+  H1.Body.Reader.schedule_read ~on_eof ~on_read body;
   Lwt.async @@ fun () -> Lwt_mvar.put mvar resp
 
 let transmit body = function
-  | None -> Httpaf.Body.close_writer body
+  | None -> H1.Body.Writer.close body
   | Some str ->
-      Httpaf.Body.write_string body str;
-      Httpaf.Body.close_writer body
+      H1.Body.Writer.write_string body str;
+      H1.Body.Writer.close body
 
-exception Invalid_response_body_length of Httpaf.Response.t
+exception Invalid_response_body_length of H1.Response.t
 exception Malformed_response of string
 
-let call ?(ctx = Mimic.empty) ?(headers = Httpaf.Headers.empty) ?body ?chunked
+let call ?(ctx = Mimic.empty) ?(headers = H1.Headers.empty) ?body ?chunked
     (meth : [ `GET | `POST ]) uri =
   let ctx = with_uri uri ctx in
   let headers = with_host headers uri in
   let headers = with_transfer_encoding ~chunked meth body headers in
   let req =
-    Httpaf.Request.create ~headers
-      (meth :> Httpaf.Method.t)
+    H1.Request.create ~headers
+      (meth :> H1.Method.t)
       (Uri.path_and_query uri)
   in
   let stream, pusher = Lwt_stream.create () in
@@ -142,11 +145,11 @@ let call ?(ctx = Mimic.empty) ?(headers = Httpaf.Headers.empty) ?body ?chunked
   | Ok flow -> (
       let error_handler = error_handler mvar_err in
       let response_handler = response_handler mvar_res pusher in
-      let httpaf_body, conn =
-        Httpaf.Client_connection.request ~error_handler ~response_handler req
+      let h1_body, conn =
+        H1.Client_connection.request ~error_handler ~response_handler req
       in
-      Lwt.async (fun () -> Paf.run (module Httpaf_Client_connection) conn flow);
-      transmit httpaf_body body;
+      Lwt.async (fun () -> Paf.run (module H1_Client_connection) conn flow);
+      transmit h1_body body;
       Lwt.pick
         [
           (Lwt_mvar.take mvar_res >|= fun res -> `Response res);
@@ -168,7 +171,7 @@ let http_post ?ctx ?body ?chunked ?headers uri =
   call ?ctx ?body ?chunked ?headers `POST uri
 
 let get ~ctx ?(headers = []) uri : (_, error) result Lwt.t =
-  let headers = Httpaf.Headers.of_list headers in
+  let headers = H1.Headers.of_list headers in
   let f uri =
     let edn = Smart_git.Endpoint.of_string (Uri.to_string uri) in
     let edn = Rresult.R.get_ok edn in
@@ -181,7 +184,7 @@ let get ~ctx ?(headers = []) uri : (_, error) result Lwt.t =
   @@ fun exn -> Lwt.return_error exn
 
 let post ~ctx ?(headers = []) uri body : (_, error) result Lwt.t =
-  let headers = Httpaf.Headers.of_list headers in
+  let headers = H1.Headers.of_list headers in
   let f uri =
     let edn = Smart_git.Endpoint.of_string (Uri.to_string uri) in
     let edn = Rresult.R.get_ok edn in
