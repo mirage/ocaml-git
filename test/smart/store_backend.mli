@@ -13,11 +13,7 @@ val parents :
   ((Uid.t * int ref * int64) list, 's) io
 
 val deref : 's scheduler -> (_, _, git) store -> Ref.t -> (Uid.t option, 's) io
-
-val locals :
-  's scheduler ->
-  (Uid.t, Uid.t * int ref * int64, git) store ->
-  (Ref.t list, 's) io
+val locals : 's scheduler -> (Uid.t, 'a, git) store -> (Ref.t list, 's) io
 
 val get_object_for_packer :
   's scheduler ->
