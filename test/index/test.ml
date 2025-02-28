@@ -23,7 +23,7 @@ open Git_index
 
 let empty =
   Alcotest.test_case "empty" `Quick @@ fun path ->
-  let index = make SHA1 in
+  let index = make ~root:path SHA1 in
   let run path =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
@@ -31,7 +31,7 @@ let empty =
     let status = Bos.Cmd.(v "git" % "status" % "--porcelain") in
     let status = Bos.OS.Cmd.run_out status in
     Bos.OS.Cmd.out_lines status >>= function
-    | [], _ -> load ~hash:SHA1 Fpath.(v ".git" / "index")
+    | [], _ -> load ~hash:SHA1 ~root:path Fpath.(v ".git" / "index")
     | res, _ ->
         Alcotest.failf "git-status: @[<hov>%a@]" Fmt.(Dump.list string) res
   in
@@ -45,7 +45,7 @@ let add_should_be_empty =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
     Bos.OS.File.write Fpath.(v "should-be-empty") "" >>= fun () ->
-    let index = make SHA1 in
+    let index = make ~root:path SHA1 in
     add ~hash:SHA1 Fpath.(v "should-be-empty") index >>= fun () ->
     store_to_path ~hash:SHA1 Fpath.(v ".git" / "index") index >>= fun () ->
     let status = Bos.Cmd.(v "git" % "status" % "--porcelain") in
@@ -128,7 +128,7 @@ let write_tree expect =
   let run path =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
-    load ~hash:SHA1 Fpath.(v ".git" / "index") >>= fun t ->
+    load ~hash:SHA1 ~root:path Fpath.(v ".git" / "index") >>= fun t ->
     let fiber =
       let open Lwt.Infix in
       Git_unix.Store.v Fpath.(v ".")
@@ -188,7 +188,7 @@ let delete_should_be_empty =
       Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
     >>= fun () ->
     Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () ->
-    load ~hash:SHA1 Fpath.(v ".git" / "index") >>= fun t ->
+    load ~hash:SHA1 ~root:path Fpath.(v ".git" / "index") >>= fun t ->
     (* XXX(dinosaure): [git] deletes [should-be-empty] into the index file **AND**
        concretely into the file-system. *)
     rem Fpath.(v "should-be-empty") t;
@@ -258,7 +258,7 @@ let populate =
     link "hello path3/subp3/file3"
       ~target:Fpath.(v "path3" / "subp3" / "file3sym")
     >>= fun () ->
-    let index = make SHA1 in
+    let index = make ~root:path SHA1 in
     add ~hash:SHA1 Fpath.(v "path0") index >>= fun () ->
     add ~hash:SHA1 Fpath.(v "path2" / "file2") index >>= fun () ->
     add ~hash:SHA1 Fpath.(v "path3" / "file3") index >>= fun () ->
@@ -297,6 +297,34 @@ let populate =
   | Error (`Store err) -> Alcotest.failf "git: %a" Git_unix.Store.pp_error err
   | Error (`Msg err) -> Alcotest.fail err
 
+let fold =
+  Alcotest.test_case "fold and absolute path" `Quick @@ fun _path ->
+  let run () =
+    let open Rresult in
+    Fmt.pr ">>> create new Git repository (tmp: %a).\n%!" Fpath.pp
+      (Bos.OS.Dir.default_tmp ());
+    Bos.OS.Dir.tmp "git-%s" >>= fun root ->
+    Fmt.pr ">>> New Git repository created: %a.\n%!" Fpath.pp root;
+    Bos.OS.Dir.with_current root
+      (fun () ->
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init") >>= fun () ->
+        Bos.OS.Cmd.run
+          Bos.Cmd.(v "git" % "config" % "init.defaultBranch" % "master")
+        >>= fun () ->
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "checkout-index" % "-u") >>= fun _ ->
+        Bos.OS.File.write Fpath.(v "foo") "foo" >>= fun () ->
+        load ~hash:SHA1 ~root Fpath.(v ".git" / "index") >>= fun index ->
+        add ~hash:SHA1 Fpath.(root / "foo") index >>= fun () ->
+        Fmt.pr ">>> Start to fold.\n%!";
+        Git_index.fold ~f:(fun _e _lst _acc -> Lwt_result.return ()) () index
+        |> Lwt_main.run)
+      ()
+  in
+  match run () |> Rresult.R.join with
+  | Ok () -> ()
+  | Error (`Store err) -> Alcotest.failf "git: %a" Git_unix.Store.pp_error err
+  | Error (`Msg err) -> Alcotest.fail err
+
 open Cmdliner
 
 let store =
@@ -313,6 +341,7 @@ let random =
   let create () =
     let open Rresult in
     Bos.OS.Dir.tmp "git-%s" >>= fun root ->
+    Fmt.pr ">>> New Git repository created: %a.\n%!" Fpath.pp root;
     Bos.OS.Dir.with_current root
       (fun () ->
         Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init") >>= fun () ->
@@ -332,6 +361,7 @@ let store =
 let () =
   Alcotest.run_with_args "index" store
     [
+      "usage", [ fold ];
       ( "index",
         [
           empty;

@@ -19,8 +19,13 @@ val add :
   hash:'oid hash -> Fpath.t -> 'oid t -> (unit, [> Rresult.R.msg ]) result
 
 val rem : Fpath.t -> 'oid t -> unit
-val make : ?version:int -> 'oid hash -> 'oid t
-val load : hash:'oid hash -> Fpath.t -> ('oid t, [> Rresult.R.msg ]) result
+val make : ?version:int -> 'oid hash -> root:Fpath.t -> 'oid t
+
+val load :
+  hash:'oid hash ->
+  root:Fpath.t ->
+  Fpath.t ->
+  ('oid t, [> Rresult.R.msg ]) result
 
 val store :
   hash:'oid hash -> append:('fd -> Bigstringaf.t -> 'fd) -> 'fd -> 'oid t -> 'fd
