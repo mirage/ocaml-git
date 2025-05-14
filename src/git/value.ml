@@ -349,8 +349,8 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
               Lwt.return_some str
               (* XXX(dinosaure): replace by [(string * int * int)]. *)
           | Encore.Lavoisier.Done -> Lwt.return_none
-          | Encore.Lavoisier.Fail -> Lwt.fail (Failure "Value.stream")
-          | exception _ -> Lwt.fail (Failure "Value.stream")
+          | Encore.Lavoisier.Fail -> raise (Failure "Value.stream")
+          | exception e -> Lwt.reraise e
         in
         stream
 

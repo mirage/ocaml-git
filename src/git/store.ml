@@ -257,7 +257,7 @@ struct
     | Ok v -> Lwt.return v
     | Error _ ->
         let err = Fmt.str "Git.Store.read_exn: %a not found" Hash.pp hash in
-        Lwt.fail_invalid_arg err
+        raise (Invalid_argument err)
 
   let stream_of_raw ?(chunk = De.io_buffer_size) raw =
     let len = Carton.Dec.len raw in
@@ -327,7 +327,7 @@ struct
     Loose.atomic_add t.minor buffers v >>= function
     | Ok (hash, _) -> Lwt.return hash
     | Error (`Store err) ->
-        Lwt.fail (Failure (Fmt.str "%a" pp_error (`Minor err)))
+        raise (Failure (Fmt.str "%a" pp_error (`Minor err)))
     | Error `Non_atomic -> (
         let consumed = Stdlib.ref false in
         let stream () =
@@ -339,7 +339,7 @@ struct
         Loose.add t.minor buffers (kind, Int64.of_int len) stream >>= function
         | Ok (hash, _) -> Lwt.return hash
         | Error (`Store err) ->
-            Lwt.fail (Failure (Fmt.str "%a" pp_error (`Minor err))))
+            raise (Failure (Fmt.str "%a" pp_error (`Minor err))))
 
   let mem t hash =
     if not (Pack.exists t.major t.packs hash) then Loose.exists t.minor hash

@@ -179,7 +179,7 @@ struct
         in
         let raw = Bigstringaf.copy buffer ~off ~len in
         Lwt.return (Carton.Dec.v ~kind raw)
-    | None -> Lwt.fail Not_found
+    | None -> raise Not_found
 
   include Smart_git.Make (Scheduler) (Pack) (Index) (Hash) (Reference)
 

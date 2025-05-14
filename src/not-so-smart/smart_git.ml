@@ -273,7 +273,7 @@ struct
               go ({ Carton.Dec.Idx.offset; crc; uid } :: entries) offsets)
             (fun exn ->
               Printexc.print_backtrace stdout;
-              Lwt.fail exn)
+              Lwt.reraise exn)
     in
     go [] offsets >>= fun entries ->
     Pack.close t fd >>? fun () -> Lwt.return_ok entries
@@ -375,7 +375,7 @@ struct
         Mimic.close flow >>= fun () -> Lwt.return_ok refs)
     @@ fun exn ->
     pack None >>= fun () ->
-    Mimic.close flow >>= fun () -> Lwt.fail exn
+    Mimic.close flow >>= fun () -> Lwt.reraise exn
 
   let default_capabilities =
     [
