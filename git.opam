@@ -24,7 +24,7 @@ depends: [
   "optint"
   "decompress" {>= "1.4.0"}
   "logs"
-  "lwt"
+  "lwt" {>= "5.7.0"}
   "mimic" {>= "0.0.6"}
   "cstruct" {>= "6.0.0"}
   "angstrom" {>= "0.14.0"}

@@ -264,7 +264,8 @@ module Make (Digestif : Digestif.S) = struct
   let read_exn t h =
     let open Lwt.Infix in
     match read t h with
-    | Error _ -> Lwt.fail (failuref "%a not found" Hash.pp h)
+    | Error e ->
+      raise (failuref "%a not found: %a" Hash.pp h pp_error e)
     | Ok v -> Lwt.pause () >|= fun () -> v
 
   let read_opt t h =
