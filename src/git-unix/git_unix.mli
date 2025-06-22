@@ -39,3 +39,5 @@ module Store : sig
       function should be registered with [at_exit] to clean pending
       file-descriptors. *)
 end
+
+val std_in_out_ctx : unit -> Mimic.ctx Lwt.t

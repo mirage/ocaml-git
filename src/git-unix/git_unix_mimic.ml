@@ -102,13 +102,12 @@ module TCP = struct
   let unlisten _ = assert false
 end
 
-module FIFO = struct
+module Lwt_unix_file_descr_flow = struct
   open Lwt.Infix
 
   let ( >>? ) = Lwt_result.bind
 
   type flow = Lwt_unix.file_descr * Lwt_unix.file_descr
-  type endpoint = Fpath.t
   type error = [ `Error of Unix.error * string * string ]
   type write_error = [ `Closed | `Error of Unix.error * string * string ]
 
@@ -146,6 +145,12 @@ module FIFO = struct
     | x :: r -> write fd x >>? fun () -> writev fd r
 
   let close (ic, oc) = Lwt_unix.close ic >>= fun () -> Lwt_unix.close oc
+end
+
+module FIFO = struct
+  include Lwt_unix_file_descr_flow
+
+  type endpoint = Fpath.t
 
   let shutdown (ic, oc) = function
     | `read -> Lwt_unix.close ic
@@ -203,3 +208,14 @@ let ctx happy_eyeballs =
       ~k:k2 ctx
   in
   C.with_optional_tls_config_and_headers ctx
+
+module Std_in_out = struct
+  include Lwt_unix_file_descr_flow
+
+  type endpoint = unit
+
+  let connect () = Lwt.return_ok Lwt_unix.(stdin, stdout)
+end
+
+let std_endpoint, _ = Mimic.register ~name:"std" (module Std_in_out)
+let std_in_out_ctx () = Lwt.return (Mimic.add std_endpoint () Mimic.empty)

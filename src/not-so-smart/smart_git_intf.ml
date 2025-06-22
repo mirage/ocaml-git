@@ -119,7 +119,18 @@ module type SMART_GIT = sig
 
   val git_uri : Uri.t Mimic.value
 
-  module Make
+  module Make_stream_pack (Uid : UID) : sig
+    type 'a stream = unit -> 'a option Lwt.t
+
+    val pack :
+      light_load:Uid.t Carton_lwt.Thin.light_load ->
+      heavy_load:Uid.t Carton_lwt.Thin.heavy_load ->
+      Uid.t list ->
+      string stream
+    (** For a list of uids, construct and stream a pack. *)
+  end
+
+  module Make_client
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
       (Pack : APPEND with type +'a fiber = 'a Lwt.t)
       (Index : APPEND with type +'a fiber = 'a Lwt.t)
@@ -161,5 +172,38 @@ module type SMART_GIT = sig
       ?capabilities:Smart.Capability.t list ->
       [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
       (unit, ([> `Exn of exn | Mimic.error ] as 'err)) result Lwt.t
+  end
+
+  module Make_server
+      (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
+      (Flow : Sigs.FLOW with type +'a fiber = 'a Lwt.t)
+      (Pack : APPEND with type +'a fiber = 'a Lwt.t)
+      (Index : APPEND with type +'a fiber = 'a Lwt.t)
+      (Uid : UID)
+      (Ref : Sigs.REF) : sig
+    val upload_pack :
+      Flow.t ->
+      (Uid.t, Ref.t, Uid.t Pck.t, 'a, Scheduler.t) Sigs.access
+      * Uid.t Carton_lwt.Thin.light_load
+      * Uid.t Carton_lwt.Thin.heavy_load ->
+      (Uid.t, Uid.t Pck.t, 'a) Sigs.store ->
+      unit Flow.fiber
+    (** Answers a [git fetch] *)
+
+    (*val receive_pack : *)
+    (*  (Uid.t, _, Uid.t, 'g, Scheduler.t) Sigs.access *)
+    (*  * Uid.t Carton_lwt.Thin.light_load *)
+    (*  * Uid.t Carton_lwt.Thin.heavy_load -> *)
+    (*  (Uid.t, _, 'g) Sigs.store -> *)
+    (*  flow:Mimic.flow -> *)
+    (*  ?version:[> `V1 ] -> *)
+    (*  ?capabilities:Smart.Capability.t list -> *)
+    (*  Pack.t -> *)
+    (*  Index.t -> *)
+    (*  src:Pack.uid -> *)
+    (*  dst:Pack.uid -> *)
+    (*  idx:Index.uid -> *)
+    (*  (unit, ([> `Exn of exn ] as 'err)) result Lwt.t *)
+    (*(1** Answers a [git push]  *1) *)
   end
 end

@@ -51,6 +51,8 @@ module type S = sig
     | `Update of Reference.t * Reference.t ]
     list ->
     (unit, error) result Lwt.t
+
+  val upload_pack : flow:Mimic.flow -> store -> unit Lwt.t
 end
 
 module Make
@@ -181,7 +183,7 @@ struct
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> raise Not_found
 
-  include Smart_git.Make (Scheduler) (Pack) (Index) (Hash) (Reference)
+  include Smart_git.Make_client (Scheduler) (Pack) (Index) (Hash) (Reference)
 
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
@@ -293,4 +295,30 @@ struct
     push ~ctx
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities cmds
+
+  module Flow = Unixiz.Make (Mimic)
+
+  include
+    Smart_git.Make_server (Scheduler) (Flow) (Pack) (Index) (Hash) (Reference)
+
+  let access =
+    Sigs.
+      {
+        get =
+          (fun uid t ->
+            Scheduler.inj (get_object_for_packer (Ministore.prj t) uid));
+        parents = (fun _ _ -> assert false);
+        deref =
+          (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
+        locals = (fun t -> Scheduler.inj (locals (Ministore.prj t)));
+        shallowed = (fun _ -> assert false);
+        shallow = (fun _ -> assert false);
+        unshallow = (fun _ -> assert false);
+      }
+
+  let upload_pack ~flow t =
+    let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
+    upload_pack (Flow.make flow)
+      (access, lightly_load t, heavily_load t)
+      ministore
 end

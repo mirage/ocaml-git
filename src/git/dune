@@ -5,6 +5,8 @@
   hxd.core
   hxd.string
   mimic
+  mirage-flow
+  git.nss.unixiz
   rresult
   git.nss.sigs
   git.nss.pck

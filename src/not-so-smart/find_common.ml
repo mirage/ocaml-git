@@ -174,56 +174,58 @@ let find_common (type t) scheduler io flow cfg
                 let rec loop () =
                   Smart_flow.run scheduler raise io flow
                     Smart.(recv ctx recv_ack)
-                  >>| Smart.Negotiation.map ~f:of_hex
-                  >>= fun ack ->
-                  match ack with
-                  | Smart.Negotiation.NAK ->
+                  >>= function
+                  | `NAK ->
                       Log.debug (fun m -> m "Receive NAK.");
                       return `Continue
-                  | ACK _ ->
-                      flushes := 0;
-                      cfg.multi_ack <- `None;
-                      (* XXX(dinosaure): [multi_ack] supported by the client but it
-                         is not supported by the server. TODO: use [Context.shared]. *)
-                      retval := 0;
-                      return `Done
-                  | ACK_common uid | ACK_ready uid | ACK_continue uid -> (
-                      access.get uid store >>= function
-                      | None -> assert false
-                      | Some obj ->
-                          Default.ack scheduler ~parents:access.parents store
-                            negotiator obj
-                          >>= fun was_common ->
-                          if
-                            stateless
-                            && Smart.Negotiation.is_common ack
-                            && not was_common
-                          then (
-                            (* we need to replay the have for this object on the next RPC request so
-                               the peer kows it is in common with us. *)
-                            Log.debug (fun m -> m "[+] have %s." (to_hex uid));
-                            unsafe_write_have ctx (to_hex uid);
-                            (* reset [in_vain] because an ack for this commit has not been seen. *)
-                            in_vain := 0;
-                            retval := 0;
-                            got_continue := true;
-                            loop ())
-                          else if
-                            (not stateless)
-                            || not (Smart.Negotiation.is_common ack)
-                          then (
-                            in_vain := 0;
-                            retval := 0;
-                            got_continue := true;
-                            if Smart.Negotiation.is_ready ack then
-                              got_ready := true;
-                            loop ())
-                          else (
-                            retval := 0;
-                            got_continue := true;
-                            if Smart.Negotiation.is_ready ack then
-                              got_ready := true;
-                            loop ()))
+                  | `ACK ack -> (
+                      let ack = Smart.Negotiation.map ~f:of_hex ack in
+                      match ack with
+                      | ACK _ ->
+                          flushes := 0;
+                          cfg.multi_ack <- `None;
+                          (* XXX(dinosaure): [multi_ack] supported by the client but it
+                             is not supported by the server. TODO: use [Context.shared]. *)
+                          retval := 0;
+                          return `Done
+                      | ACK_common uid | ACK_ready uid | ACK_continue uid -> (
+                          access.get uid store >>= function
+                          | None -> assert false
+                          | Some obj ->
+                              Default.ack scheduler ~parents:access.parents
+                                store negotiator obj
+                              >>= fun was_common ->
+                              if
+                                stateless
+                                && Smart.Negotiation.is_common ack
+                                && not was_common
+                              then (
+                                (* we need to replay the have for this object on the next RPC request so
+                                   the peer kows it is in common with us. *)
+                                Log.debug (fun m ->
+                                    m "[+] have %s." (to_hex uid));
+                                unsafe_write_have ctx (to_hex uid);
+                                (* reset [in_vain] because an ack for this commit has not been seen. *)
+                                in_vain := 0;
+                                retval := 0;
+                                got_continue := true;
+                                loop ())
+                              else if
+                                (not stateless)
+                                || not (Smart.Negotiation.is_common ack)
+                              then (
+                                in_vain := 0;
+                                retval := 0;
+                                got_continue := true;
+                                if Smart.Negotiation.is_ready ack then
+                                  got_ready := true;
+                                loop ())
+                              else (
+                                retval := 0;
+                                got_continue := true;
+                                if Smart.Negotiation.is_ready ack then
+                                  got_ready := true;
+                                loop ())))
                 in
                 loop () >>= function
                 | `Done -> return ()
@@ -253,18 +255,19 @@ let find_common (type t) scheduler io flow cfg
       >>= fun () ->
       let rec go () =
         if !flushes > 0 || cfg.multi_ack = `Some || cfg.multi_ack = `Detailed
-        then (
+        then
           Smart_flow.run scheduler raise io flow Smart.(recv ctx recv_ack)
-          >>| Smart.Negotiation.map ~f:of_hex
-          >>= fun ack ->
-          match ack with
-          | Smart.Negotiation.ACK _ -> return (`Continue 0)
-          | ACK_common _ | ACK_continue _ | ACK_ready _ ->
-              cfg.multi_ack <- `Some;
-              go ()
-          | NAK ->
+          >>= function
+          | `NAK ->
               decr flushes;
-              go ())
+              go ()
+          | `ACK ack -> (
+              let ack = Smart.Negotiation.map ~f:of_hex ack in
+              match ack with
+              | Smart.Negotiation.ACK _ -> return (`Continue 0)
+              | ACK_common _ | ACK_continue _ | ACK_ready _ ->
+                  cfg.multi_ack <- `Some;
+                  go ())
         else if !count > 0 then return (`Continue !retval)
         else return (`Continue 0)
       in

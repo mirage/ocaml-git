@@ -43,7 +43,7 @@
 (library
  (name nss)
  (public_name git.nss)
- (modules nss fetch push)
+ (modules nss fetch push upload_pack)
  (libraries
   fmt
   rresult

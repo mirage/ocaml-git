@@ -50,6 +50,8 @@ module type S = sig
     | `Update of Reference.t * Reference.t ]
     list ->
     (unit, error) result Lwt.t
+
+  val upload_pack : flow:Mimic.flow -> store -> unit Lwt.t
 end
 
 (** Creates a lower-level [Sync] functions [fetch] and [push] that are then
@@ -106,4 +108,7 @@ module Make
     | `Update of Reference.t * Reference.t ]
     list ->
     (unit, ([> error ] as 'err)) result Lwt.t
+
+  val upload_pack : flow:Mimic.flow -> store -> unit Lwt.t
+  (** Answers a [git fetch] *)
 end
