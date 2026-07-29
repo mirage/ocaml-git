@@ -10,6 +10,7 @@ module Commit = Commit
 module Tree = Tree
 module Tag = Tag
 module Reference = Reference
+module Config = Config
 module User = User
 module Value = Value
 module Traverse_bfs = Traverse_bfs
