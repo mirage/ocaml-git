@@ -146,7 +146,7 @@ module type SMART_GIT = sig
       dst:Pack.uid ->
       idx:Index.uid ->
       ( [ `Pack of Uid.t * (Ref.t * Uid.t) list | `Empty ],
-        ([> `Exn of exn | Mimic.error ] as 'err) )
+        [> `Exn of exn | Mimic.error ] )
       result
       Lwt.t
 
@@ -160,6 +160,6 @@ module type SMART_GIT = sig
       ?version:[> `V1 ] ->
       ?capabilities:Smart.Capability.t list ->
       [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
-      (unit, ([> `Exn of exn | Mimic.error ] as 'err)) result Lwt.t
+      (unit, [> `Exn of exn | Mimic.error ]) result Lwt.t
   end
 end

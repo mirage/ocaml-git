@@ -102,7 +102,11 @@ module H1_Client_connection = struct
     (next_read_operation t :> [ `Close | `Read | `Yield | `Upgrade ])
 
   let next_write_operation t =
-    (next_write_operation t :> [ `Close of int | `Write of Bigstringaf.t H1.IOVec.t list | `Yield | `Upgrade ])
+    (next_write_operation t
+      :> [ `Close of int
+         | `Write of Bigstringaf.t H1.IOVec.t list
+         | `Yield
+         | `Upgrade ])
 end
 
 let error_handler mvar err = Lwt.async @@ fun () -> Lwt_mvar.put mvar err
@@ -132,9 +136,7 @@ let call ?(ctx = Mimic.empty) ?(headers = H1.Headers.empty) ?body ?chunked
   let headers = with_host headers uri in
   let headers = with_transfer_encoding ~chunked meth body headers in
   let req =
-    H1.Request.create ~headers
-      (meth :> H1.Method.t)
-      (Uri.path_and_query uri)
+    H1.Request.create ~headers (meth :> H1.Method.t) (Uri.path_and_query uri)
   in
   let stream, pusher = Lwt_stream.create () in
   let mvar_res = Lwt_mvar.create_empty () in
