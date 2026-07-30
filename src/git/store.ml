@@ -326,8 +326,7 @@ struct
     Lwt_pool.use t.buffs @@ fun buffers ->
     Loose.atomic_add t.minor buffers v >>= function
     | Ok (hash, _) -> Lwt.return hash
-    | Error (`Store err) ->
-        raise (Failure (Fmt.str "%a" pp_error (`Minor err)))
+    | Error (`Store err) -> raise (Failure (Fmt.str "%a" pp_error (`Minor err)))
     | Error `Non_atomic -> (
         let consumed = Stdlib.ref false in
         let stream () =

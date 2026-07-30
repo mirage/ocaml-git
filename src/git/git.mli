@@ -8,6 +8,7 @@ module Tree = Tree
 module Tag = Tag
 module User = User
 module Reference = Reference
+module Config = Config
 module Value = Value
 module Traverse_bfs = Traverse_bfs
 module Object_graph = Object_graph
