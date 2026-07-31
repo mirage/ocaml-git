@@ -1,0 +1,32 @@
+(executable
+ (name test)
+ (modules test)
+ (libraries
+  bos
+  fpath
+  lwt
+  lwt.unix
+  cstruct
+  mirage-flow
+  alcotest
+  alcotest-lwt
+  mimic
+  git
+  git.nss.git
+  fmt
+  logs
+  mirage-crypto-rng
+  mirage-crypto-rng.unix
+  digestif
+  digestif.c
+  unix))
+
+(rule
+ (alias runtest)
+ (package git-unix)
+ (enabled_if
+  (= %{os_type} "Unix"))
+ (deps
+  (:test test.exe))
+ (action
+  (run %{test} --color=always)))
