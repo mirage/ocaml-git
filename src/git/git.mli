@@ -18,5 +18,6 @@ module Hash = Hash
 module Sync = Sync
 module Cstruct_append = Cstruct_append
 module Shallow = Shallow
+module Remote = Remote
 
 module type S = Minimal.S
