@@ -1,3 +1,7 @@
+### 3.19.0 (2026-11-09) Paris - France
+
+- Upgrade to awa.0.7.0 and OCaml 5.5.0 (@dinosaure, #659) 
+
 ### 3.18.0 (2025-02-17) Paris - France
 
 - Show error message when the HTTP/Git handshake has an error (@reynir, #647)
