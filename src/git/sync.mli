@@ -87,7 +87,7 @@ module Make
     create_pack_stream:(unit -> unit -> string option Lwt.t) ->
     Pack.t ->
     Index.t ->
-    ((hash * (Reference.t * hash) list) option, ([> error ] as 'err)) result
+    ((hash * (Reference.t * hash) list) option, ([> error ])) result
     Lwt.t
   (** fetches remote references and saves them.
           Behavior of fetch when [want] is
@@ -105,5 +105,5 @@ module Make
     | `Delete of Reference.t
     | `Update of Reference.t * Reference.t ]
     list ->
-    (unit, ([> error ] as 'err)) result Lwt.t
+    (unit, ([> error ])) result Lwt.t
 end

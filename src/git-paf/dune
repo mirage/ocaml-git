@@ -4,6 +4,7 @@
  (libraries
   logs
   uri
+  bstr
   tcpip
   mirage-flow
   domain-name

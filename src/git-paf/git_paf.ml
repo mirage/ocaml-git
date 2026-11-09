@@ -102,7 +102,7 @@ module H1_Client_connection = struct
     (next_read_operation t :> [ `Close | `Read | `Yield | `Upgrade ])
 
   let next_write_operation t =
-    (next_write_operation t :> [ `Close of int | `Write of Bigstringaf.t H1.IOVec.t list | `Yield | `Upgrade ])
+    (next_write_operation t :> [ `Close of int | `Write of Bstr.t H1.IOVec.t list | `Yield | `Upgrade ])
 end
 
 let error_handler mvar err = Lwt.async @@ fun () -> Lwt_mvar.put mvar err
