@@ -3,6 +3,7 @@
 - Show error message when the HTTP/Git handshake has an error (@reynir, #647)
 - Add `x-maintenance-intent` (@hannesm, #648)
 - De-functorize `ocaml-git` (@hannesm, #650)
+- Use the last version of `paf` (@dinosaure, #651)
 
 ### 3.17.0 (2024-09-04) Berlin - Germany
 
