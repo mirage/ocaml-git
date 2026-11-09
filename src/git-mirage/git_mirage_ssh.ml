@@ -3,7 +3,7 @@ open Lwt.Infix
 type endpoint = {
   port : int;
   hostname : string;
-  authenticator : Awa.Keys.authenticator option;
+  authenticator : Awa.Keys.authenticator;
   user : string;
   credentials : [ `Password of string | `Pubkey of Awa.Hostkey.priv ];
   path : string;
@@ -20,7 +20,7 @@ module type S = sig
   val connect : Mimic.ctx -> Mimic.ctx Lwt.t
 
   val with_optionnal_key :
-    ?authenticator:string ->
+    authenticator:string ->
     key:string option ->
     password:string option ->
     Mimic.ctx ->
@@ -67,7 +67,7 @@ struct
       >>= function
       | Error (`Msg err) -> Lwt.return_error (`Connect (`Msg err))
       | Ok ((_ipaddr, _port), flow) -> (
-          client_of_flow ?authenticator:edn.authenticator ~user:edn.user
+          client_of_flow edn.authenticator ~user:edn.user
             edn.credentials channel_request flow
           >>= function
           | Error err -> Lwt.return_error (`Connect err)
@@ -130,7 +130,7 @@ struct
             req Smart_git.git_capabilities;
             opt git_mirage_ssh_key;
             opt git_mirage_ssh_password;
-            opt git_mirage_ssh_authenticator;
+            req git_mirage_ssh_authenticator;
           ]
         ~k:k1 ctx
     in
@@ -141,19 +141,18 @@ struct
     in
     Lwt.return ctx
 
-  let with_optionnal_key ?authenticator ~key ~password ctx =
+  let with_optionnal_key ~authenticator ~key ~password ctx =
     let authenticator =
-      Option.map Awa.Keys.authenticator_of_string authenticator
+      Awa.Keys.authenticator_of_string authenticator
     in
     let key = Option.map Awa.Keys.of_string key in
     let ctx =
       match authenticator with
-      | Some (Error err) ->
+      | Error err ->
           print_endline ("[git-mirage-ssh] authenticator error: " ^ err);
           exit 64
-      | Some (Ok authenticator) ->
+      | Ok authenticator ->
           Mimic.add git_mirage_ssh_authenticator authenticator ctx
-      | None -> ctx
     in
     match key, password with
     | Some (Error (`Msg err)), _ ->
