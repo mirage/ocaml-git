@@ -1,7 +1,7 @@
 type endpoint = {
   port : int;
   hostname : string;
-  authenticator : Awa.Keys.authenticator option;
+  authenticator : Awa.Keys.authenticator;
   user : string;
   credentials : [ `Password of string | `Pubkey of Awa.Hostkey.priv ];
   path : string;
@@ -16,7 +16,7 @@ module type S = sig
   val connect : Mimic.ctx -> Mimic.ctx Lwt.t
 
   val with_optionnal_key :
-    ?authenticator:string ->
+    authenticator:string ->
     key:string option ->
     password:string option ->
     Mimic.ctx ->
