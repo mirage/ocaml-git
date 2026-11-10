@@ -24,6 +24,7 @@ depends: [
   "bigstringaf"
   "domain-name"
   "h1"
+  "bstr"
   "mirage-flow" {>= "4.0.0"}
   "tls-mirage" {>= "1.0.0"}
 ]
